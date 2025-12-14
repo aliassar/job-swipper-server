@@ -331,7 +331,7 @@ export const auditLogs = pgTable('audit_logs', {
 // Password reset tokens table
 export const passwordResetTokens = pgTable('password_reset_tokens', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   token: text('token').notNull().unique(),
   expiresAt: timestamp('expires_at').notNull(),
   used: boolean('used').notNull().default(false),

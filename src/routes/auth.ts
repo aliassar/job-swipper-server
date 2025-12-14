@@ -4,6 +4,7 @@ import { AppContext } from '../types';
 import { authService } from '../services/auth.service';
 import { formatResponse } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
+import { authMiddleware } from '../middleware/auth';
 
 const auth = new Hono<AppContext>();
 
@@ -238,16 +239,15 @@ auth.post('/logout', async (c) => {
 });
 
 // GET /auth/me - Get current user (requires auth middleware)
-auth.get('/me', async (c) => {
-  const auth = c.get('auth');
+auth.get('/me', authMiddleware, async (c) => {
+  const authContext = c.get('auth');
   const requestId = c.get('requestId');
 
-  // Auth middleware should populate this
   return c.json(
     formatResponse(
       true,
       {
-        userId: auth.userId,
+        userId: authContext.userId,
       },
       null,
       requestId
