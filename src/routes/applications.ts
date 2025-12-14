@@ -11,14 +11,17 @@ const applications = new Hono<AppContext>();
 const updateStageSchema = z.object({
   stage: z.enum([
     'Syncing',
+    'CV Check',
+    'Message Check',
     'Being Applied',
     'Applied',
-    'Phone Screen',
-    'Interview',
+    'Interview 1',
+    'Next Interviews',
     'Offer',
     'Rejected',
     'Accepted',
     'Withdrawn',
+    'Failed',
   ]),
 });
 

@@ -98,7 +98,7 @@ export const applicationService = {
   async updateApplicationStage(
     userId: string,
     applicationId: string,
-    stage: 'Syncing' | 'Being Applied' | 'Applied' | 'Phone Screen' | 'Interview' | 'Offer' | 'Rejected' | 'Accepted' | 'Withdrawn'
+    stage: 'Syncing' | 'CV Check' | 'Message Check' | 'Being Applied' | 'Applied' | 'Interview 1' | 'Next Interviews' | 'Offer' | 'Rejected' | 'Accepted' | 'Withdrawn' | 'Failed'
   ) {
     const application = await this.getApplicationById(userId, applicationId);
 

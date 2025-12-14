@@ -14,6 +14,8 @@ import generation from './generation';
 import emailSync from './email-sync';
 import users from './users';
 import sync from './sync';
+import notifications from './notifications';
+import webhooks from './webhooks';
 
 const api = new Hono<AppContext>();
 
@@ -34,6 +36,9 @@ api.route('/sync', sync);
 // Auth endpoints (no auth required)
 api.route('/auth', auth);
 
+// Webhook endpoints (no auth required - use custom auth middleware)
+api.route('/webhooks', webhooks);
+
 // All other routes require authentication
 api.use('/jobs/*', authMiddleware);
 api.use('/applications/*', authMiddleware);
@@ -46,6 +51,7 @@ api.use('/cover-letters/*', authMiddleware);
 api.use('/generated/*', authMiddleware);
 api.use('/email/*', authMiddleware);
 api.use('/users/*', authMiddleware);
+api.use('/notifications/*', authMiddleware);
 
 // Mount routes
 api.route('/jobs', jobs);
@@ -59,5 +65,6 @@ api.route('/cover-letters', coverLetters);
 api.route('/', generation); // Generation routes are mounted at root for /jobs/:id/generate/*
 api.route('/email', emailSync);
 api.route('/users', users);
+api.route('/notifications', notifications);
 
 export default api;
