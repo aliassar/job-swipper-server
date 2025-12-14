@@ -5,6 +5,7 @@ import { NotFoundError } from '../lib/errors';
 import { generationService } from './generation.service';
 import { applicationService } from './application.service';
 import { resumeService } from './resume.service';
+import { logger } from '../middleware/logger';
 
 export const jobService = {
   async getPendingJobs(userId: string, search?: string, limit: number = 10) {
@@ -335,7 +336,7 @@ export const jobService = {
       application = await applicationService.createApplication(userId, jobId);
     } catch (error) {
       // Application might already exist, continue
-      console.error('Error creating application:', error);
+      logger.error({ error, userId, jobId }, 'Error creating application during job acceptance');
     }
 
     // Auto-generate resume if enabled
@@ -357,7 +358,7 @@ export const jobService = {
             .where(eq(applications.id, application.id));
         }
       } catch (error) {
-        console.error('Error auto-generating resume:', error);
+        logger.error({ error, userId, jobId }, 'Error auto-generating resume');
       }
     }
 
@@ -376,7 +377,7 @@ export const jobService = {
           .set({ generatedCoverLetterId: generatedCoverLetter.id })
           .where(eq(applications.id, application.id));
       } catch (error) {
-        console.error('Error auto-generating cover letter:', error);
+        logger.error({ error, userId, jobId }, 'Error auto-generating cover letter');
       }
     }
 
