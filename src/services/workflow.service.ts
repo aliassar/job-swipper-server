@@ -10,6 +10,7 @@ import { resumeService } from './resume.service';
 import { notificationService } from './notification.service';
 import { applicationSenderClient } from '../lib/microservice-client';
 import type { ApplicationSenderRequest, ApplicationSenderResponse, UserProfile } from '../lib/microservices';
+import { extractS3KeyFromUrl } from '../lib/utils';
 
 export type WorkflowStatus = 'pending' | 'generating_resume' | 'generating_cover_letter' | 'waiting_cv_verification' | 'waiting_message_verification' | 'applying' | 'completed' | 'failed' | 'cancelled';
 
@@ -358,8 +359,7 @@ export const workflowService = {
               .where(eq(generatedResumes.id, appData.generatedResumeId))
               .limit(1);
             if (resume) {
-              // Extract S3 key from URL
-              resumeS3Key = resume.fileUrl.split('/').pop() || resume.fileUrl;
+              resumeS3Key = extractS3KeyFromUrl(resume.fileUrl);
             }
           }
 
@@ -370,8 +370,7 @@ export const workflowService = {
               .where(eq(generatedCoverLetters.id, appData.generatedCoverLetterId))
               .limit(1);
             if (coverLetter) {
-              // Extract S3 key from URL
-              coverLetterS3Key = coverLetter.fileUrl.split('/').pop() || coverLetter.fileUrl;
+              coverLetterS3Key = extractS3KeyFromUrl(coverLetter.fileUrl);
             }
           }
 

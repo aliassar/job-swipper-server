@@ -42,12 +42,25 @@ class EmailClient {
     }
 
     try {
+      // Generate plain text from HTML if not provided
+      // Note: This is a simple implementation. For production, consider using a library like 'html-to-text'
+      const plainText = options.text || options.html
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style tags
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags
+        .replace(/<[^>]+>/g, '') // Remove HTML tags
+        .replace(/&nbsp;/g, ' ') // Replace &nbsp;
+        .replace(/&amp;/g, '&') // Replace &amp;
+        .replace(/&lt;/g, '<') // Replace &lt;
+        .replace(/&gt;/g, '>') // Replace &gt;
+        .replace(/&quot;/g, '"') // Replace &quot;
+        .trim();
+
       await this.transporter.sendMail({
         from: FROM_EMAIL,
         to: options.to,
         subject: options.subject,
         html: options.html,
-        text: options.text || options.html.replace(/<[^>]*>/g, ''),
+        text: plainText,
       });
 
       logger.info({ to: options.to, subject: options.subject }, 'Email sent successfully');

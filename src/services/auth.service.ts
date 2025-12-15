@@ -281,8 +281,12 @@ export const authService = {
       throw new AuthenticationError('Failed to exchange Google OAuth code');
     }
 
-    const tokenData = await tokenResponse.json() as { access_token: string };
-    const accessToken = tokenData.access_token;
+    const tokenData = await tokenResponse.json() as Record<string, unknown>;
+    const accessToken = tokenData.access_token as string;
+
+    if (!accessToken) {
+      throw new AuthenticationError('No access token received from Google');
+    }
 
     // Get user info from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -293,8 +297,13 @@ export const authService = {
       throw new AuthenticationError('Failed to get user info from Google');
     }
 
-    const userInfo = await userInfoResponse.json() as { email: string; id: string };
-    const { email, id: oauthId } = userInfo;
+    const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+    const email = userInfo.email as string;
+    const oauthId = userInfo.id as string;
+
+    if (!email || !oauthId) {
+      throw new AuthenticationError('Invalid user info received from Google');
+    }
 
     // Find or create user in database
     let [user] = await db
@@ -361,8 +370,8 @@ export const authService = {
       throw new AuthenticationError('Failed to exchange GitHub OAuth code');
     }
 
-    const tokenData = await tokenResponse.json() as { access_token: string };
-    const accessToken = tokenData.access_token;
+    const tokenData = await tokenResponse.json() as Record<string, unknown>;
+    const accessToken = tokenData.access_token as string;
 
     if (!accessToken) {
       throw new AuthenticationError('No access token received from GitHub');
@@ -380,8 +389,12 @@ export const authService = {
       throw new AuthenticationError('Failed to get user info from GitHub');
     }
 
-    const userInfo = await userInfoResponse.json() as { id: number };
+    const userInfo = await userInfoResponse.json() as Record<string, unknown>;
     const oauthId = String(userInfo.id);
+
+    if (!oauthId || oauthId === 'undefined') {
+      throw new AuthenticationError('Invalid user info received from GitHub');
+    }
 
     // Get primary email from GitHub
     const emailsResponse = await fetch('https://api.github.com/user/emails', {
@@ -395,14 +408,14 @@ export const authService = {
       throw new AuthenticationError('Failed to get email from GitHub');
     }
 
-    const emails = await emailsResponse.json() as Array<{ email: string; primary: boolean; verified: boolean }>;
-    const primaryEmail = emails.find((e) => e.primary && e.verified);
+    const emails = await emailsResponse.json() as Array<Record<string, unknown>>;
+    const primaryEmail = emails.find((e) => e.primary === true && e.verified === true);
     
-    if (!primaryEmail) {
+    if (!primaryEmail || !primaryEmail.email) {
       throw new AuthenticationError('No verified primary email found in GitHub account');
     }
 
-    const email = primaryEmail.email;
+    const email = primaryEmail.email as string;
 
     // Find or create user in database
     let [user] = await db
