@@ -63,3 +63,62 @@ export function escapeHtml(text: string): string {
   };
   return text.replace(/[&<>"']/g, (char) => htmlEscapeMap[char] || char);
 }
+
+/**
+ * Parse salary string and extract min/max numeric values
+ * Examples:
+ *   "$50,000 - $80,000" => { min: 50000, max: 80000 }
+ *   "$60k-$90k" => { min: 60000, max: 90000 }
+ *   "$75,000" => { min: 75000, max: 75000 }
+ *   "Competitive" => { min: null, max: null }
+ * 
+ * This function should be used when inserting jobs into the database
+ * to populate the salaryMin and salaryMax fields for efficient querying.
+ */
+export function parseSalaryRange(salaryString: string | null | undefined): { 
+  min: number | null; 
+  max: number | null 
+} {
+  if (!salaryString) {
+    return { min: null, max: null };
+  }
+
+  // Remove common non-numeric characters but keep digits and hyphens/dashes
+  const cleaned = salaryString
+    .toLowerCase()
+    .replace(/[\$,]/g, '') // Remove $ and commas
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+
+  // Try to find numbers in the string
+  const numbers: number[] = [];
+  
+  // Match patterns like "50k", "50000", "50.5k"
+  const numberPattern = /(\d+(?:\.\d+)?)\s*k?/gi;
+  let match;
+  
+  while ((match = numberPattern.exec(cleaned)) !== null) {
+    let value = parseFloat(match[1]);
+    
+    // If followed by 'k', multiply by 1000
+    if (match[0].toLowerCase().includes('k')) {
+      value *= 1000;
+    }
+    
+    numbers.push(Math.round(value));
+  }
+
+  if (numbers.length === 0) {
+    return { min: null, max: null };
+  }
+
+  if (numbers.length === 1) {
+    return { min: numbers[0], max: numbers[0] };
+  }
+
+  // If multiple numbers found, use min and max
+  const min = Math.min(...numbers);
+  const max = Math.max(...numbers);
+  
+  return { min, max };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe } from '../lib/utils';
+import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe, parseSalaryRange } from '../lib/utils';
 
 describe('Utils', () => {
   describe('formatResponse', () => {
@@ -52,6 +52,43 @@ describe('Utils', () => {
     it('should return default for invalid input', () => {
       expect(parseBoolSafe('invalid', true)).toBe(true);
       expect(parseBoolSafe(undefined, false)).toBe(false);
+    });
+  });
+
+  describe('parseSalaryRange', () => {
+    it('should parse salary range with dash', () => {
+      const result = parseSalaryRange('$50,000 - $80,000');
+      expect(result.min).toBe(50000);
+      expect(result.max).toBe(80000);
+    });
+
+    it('should parse salary range with k notation', () => {
+      const result = parseSalaryRange('$60k-$90k');
+      expect(result.min).toBe(60000);
+      expect(result.max).toBe(90000);
+    });
+
+    it('should parse single salary value', () => {
+      const result = parseSalaryRange('$75,000');
+      expect(result.min).toBe(75000);
+      expect(result.max).toBe(75000);
+    });
+
+    it('should return null for non-numeric salary', () => {
+      const result = parseSalaryRange('Competitive');
+      expect(result.min).toBeNull();
+      expect(result.max).toBeNull();
+    });
+
+    it('should handle null or undefined input', () => {
+      expect(parseSalaryRange(null).min).toBeNull();
+      expect(parseSalaryRange(undefined).min).toBeNull();
+    });
+
+    it('should parse mixed formats', () => {
+      const result = parseSalaryRange('50k - 80000');
+      expect(result.min).toBe(50000);
+      expect(result.max).toBe(80000);
     });
   });
 });
