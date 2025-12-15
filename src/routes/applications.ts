@@ -239,12 +239,12 @@ applications.get('/:id/documents', async (c) => {
   const documents = {
     generatedResume: application.generatedResume ? {
       fileUrl: application.generatedResume.fileUrl,
-      fileName: application.generatedResume.fileName,
+      fileName: application.generatedResume.filename,
       createdAt: application.generatedResume.createdAt,
     } : null,
     generatedCoverLetter: application.generatedCoverLetter ? {
       fileUrl: application.generatedCoverLetter.fileUrl,
-      fileName: application.generatedCoverLetter.fileName,
+      fileName: application.generatedCoverLetter.filename,
       createdAt: application.generatedCoverLetter.createdAt,
     } : null,
   };

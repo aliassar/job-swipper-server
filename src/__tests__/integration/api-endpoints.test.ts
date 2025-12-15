@@ -260,12 +260,12 @@ describe('API Endpoint Reliability Tests', () => {
           id: mockApplicationId,
           generatedResume: {
             fileUrl: 'https://example.com/resume.pdf',
-            fileName: 'resume.pdf',
+            filename: 'resume.pdf',
             createdAt: new Date(),
           },
           generatedCoverLetter: {
             fileUrl: 'https://example.com/cover-letter.pdf',
-            fileName: 'cover-letter.pdf',
+            filename: 'cover-letter.pdf',
             createdAt: new Date(),
           },
         };
@@ -275,9 +275,15 @@ describe('API Endpoint Reliability Tests', () => {
         const result = await applicationService.getApplicationDetails(mockUserId, mockApplicationId);
 
         expect(result.generatedResume).toBeDefined();
-        expect(result.generatedResume.fileUrl).toBe('https://example.com/resume.pdf');
+        expect(result.generatedResume).not.toBeNull();
+        if (result.generatedResume) {
+          expect(result.generatedResume.fileUrl).toBe('https://example.com/resume.pdf');
+        }
         expect(result.generatedCoverLetter).toBeDefined();
-        expect(result.generatedCoverLetter.fileUrl).toBe('https://example.com/cover-letter.pdf');
+        expect(result.generatedCoverLetter).not.toBeNull();
+        if (result.generatedCoverLetter) {
+          expect(result.generatedCoverLetter.fileUrl).toBe('https://example.com/cover-letter.pdf');
+        }
       });
 
       it('should return null for missing documents', async () => {
