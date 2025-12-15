@@ -1,6 +1,7 @@
 import { db } from '../lib/db';
 import { scheduledTimers } from '../db/schema';
 import { eq, and, lte } from 'drizzle-orm';
+import { timerHandlers } from './timer-handlers.service';
 
 export type TimerType =
   | 'auto_apply_delay'
@@ -203,28 +204,23 @@ export const timerService = {
         // Execute timer based on type
         switch (timer.type) {
           case 'auto_apply_delay':
-            // TODO: Trigger auto-apply workflow
-            console.log(`Processing auto-apply delay for application ${timer.targetId}`);
+            await timerHandlers.handleAutoApplyDelay(timer);
             break;
 
           case 'cv_verification':
-            // TODO: Auto-confirm CV
-            console.log(`Auto-confirming CV for application ${timer.targetId}`);
+            await timerHandlers.handleCvVerificationTimeout(timer);
             break;
 
           case 'message_verification':
-            // TODO: Auto-confirm message
-            console.log(`Auto-confirming message for application ${timer.targetId}`);
+            await timerHandlers.handleMessageVerificationTimeout(timer);
             break;
 
           case 'doc_deletion':
-            // TODO: Delete documents
-            console.log(`Deleting documents: ${JSON.stringify(timer.metadata)}`);
+            await timerHandlers.handleDocDeletion(timer);
             break;
 
           case 'follow_up_reminder':
-            // TODO: Send follow-up reminder notification
-            console.log(`Sending follow-up reminder for application ${timer.targetId}`);
+            await timerHandlers.handleFollowUpReminder(timer);
             break;
 
           default:

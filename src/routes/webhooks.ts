@@ -8,6 +8,7 @@ import {
   GenerationCompleteWebhook,
   ApplicationSubmittedWebhook,
 } from '../lib/microservices';
+import { notificationService } from '../services/notification.service';
 
 const webhooks = new Hono<AppContext>();
 
@@ -70,14 +71,14 @@ webhooks.post('/status-update', async (c) => {
   // TODO: Update application stage in database
   console.log('Received status update webhook:', data);
 
-  // TODO: Create notification for user
-  // await notificationService.createNotification({
-  //   userId: data.userId,
-  //   type: 'status_changed',
-  //   title: 'Application Status Updated',
-  //   message: `Your application status has been updated to: ${data.newStage}`,
-  //   metadata: { applicationId: data.applicationId, newStage: data.newStage },
-  // });
+  // Create notification for user
+  await notificationService.createNotification(
+    data.userId,
+    'status_changed',
+    'Application Status Updated',
+    `Your application status has been updated to: ${data.newStage}`,
+    { applicationId: data.applicationId, newStage: data.newStage }
+  );
 
   return c.json(
     formatResponse(true, { message: 'Status update received' }, null, requestId)
@@ -101,23 +102,23 @@ webhooks.post('/generation-complete', async (c) => {
 
   if (data.success) {
     // TODO: Update application with generated document
-    // TODO: Create notification for user
-    // await notificationService.createNotification({
-    //   userId: data.userId,
-    //   type: data.type === 'resume' ? 'cv_ready' : 'message_ready',
-    //   title: `${data.type === 'resume' ? 'Resume' : 'Cover Letter'} Ready`,
-    //   message: `Your ${data.type === 'resume' ? 'resume' : 'cover letter'} has been generated successfully.`,
-    //   metadata: { jobId: data.jobId, s3Key: data.s3Key, filename: data.filename },
-    // });
+    // Create notification for user
+    await notificationService.createNotification(
+      data.userId,
+      data.type === 'resume' ? 'cv_ready' : 'message_ready',
+      `${data.type === 'resume' ? 'Resume' : 'Cover Letter'} Ready`,
+      `Your ${data.type === 'resume' ? 'resume' : 'cover letter'} has been generated successfully.`,
+      { jobId: data.jobId, s3Key: data.s3Key, filename: data.filename }
+    );
   } else {
-    // TODO: Create failure notification
-    // await notificationService.createNotification({
-    //   userId: data.userId,
-    //   type: 'generation_failed',
-    //   title: 'Generation Failed',
-    //   message: `Failed to generate ${data.type === 'resume' ? 'resume' : 'cover letter'}: ${data.error}`,
-    //   metadata: { jobId: data.jobId, error: data.error },
-    // });
+    // Create failure notification
+    await notificationService.createNotification(
+      data.userId,
+      'generation_failed',
+      'Generation Failed',
+      `Failed to generate ${data.type === 'resume' ? 'resume' : 'cover letter'}: ${data.error}`,
+      { jobId: data.jobId, error: data.error }
+    );
   }
 
   return c.json(
@@ -143,28 +144,28 @@ webhooks.post('/application-submitted', async (c) => {
   if (data.success) {
     // TODO: Update application status to 'Applied'
     // TODO: Set appliedAt timestamp
-    // TODO: Create notification
-    // await notificationService.createNotification({
-    //   userId: data.userId,
-    //   type: 'status_changed',
-    //   title: 'Application Submitted',
-    //   message: 'Your application has been submitted successfully.',
-    //   metadata: {
-    //     applicationId: data.applicationId,
-    //     submittedAt: data.submittedAt,
-    //     confirmationId: data.confirmationId,
-    //   },
-    // });
+    // Create notification
+    await notificationService.createNotification(
+      data.userId,
+      'status_changed',
+      'Application Submitted',
+      'Your application has been submitted successfully.',
+      {
+        applicationId: data.applicationId,
+        submittedAt: data.submittedAt,
+        confirmationId: data.confirmationId,
+      }
+    );
   } else {
     // TODO: Update application status to 'Failed'
-    // TODO: Create failure notification
-    // await notificationService.createNotification({
-    //   userId: data.userId,
-    //   type: 'apply_failed',
-    //   title: 'Application Failed',
-    //   message: `Failed to submit application: ${data.error}`,
-    //   metadata: { applicationId: data.applicationId, error: data.error },
-    // });
+    // Create failure notification
+    await notificationService.createNotification(
+      data.userId,
+      'apply_failed',
+      'Application Failed',
+      `Failed to submit application: ${data.error}`,
+      { applicationId: data.applicationId, error: data.error }
+    );
   }
 
   return c.json(
