@@ -192,4 +192,19 @@ emailConnections.post('/:id/test', async (c) => {
   return c.json(formatResponse(true, { valid: isValid }, null, requestId));
 });
 
+// POST /api/email-connections/:id/sync - Manually send credentials to Stage Updater
+emailConnections.post('/:id/sync', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const connectionId = c.req.param('id');
+
+  const result = await emailConnectionService.syncCredentialsToStageUpdater(
+    auth.userId,
+    connectionId,
+    requestId
+  );
+
+  return c.json(formatResponse(true, result, null, requestId));
+});
+
 export default emailConnections;

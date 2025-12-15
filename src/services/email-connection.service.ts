@@ -640,4 +640,58 @@ export const emailConnectionService = {
 
     logger.info({ connectionId, provider: conn.provider }, 'OAuth token refreshed');
   },
+
+  /**
+   * Manually sync credentials to Stage Updater microservice
+   * Useful for retrying failed transmissions or updating existing connections
+   */
+  async syncCredentialsToStageUpdater(
+    userId: string,
+    connectionId: string,
+    requestId?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const connection = await this.getConnection(userId, connectionId);
+
+    // Decrypt credentials
+    const decrypted = decryptCredentials({
+      encryptedAccessToken: connection.encryptedAccessToken,
+      encryptedRefreshToken: connection.encryptedRefreshToken,
+      encryptedImapPassword: connection.encryptedImapPassword,
+      encryptionIv: connection.encryptionIv,
+    });
+
+    // Prepare credentials based on provider type
+    const credentials: any = {
+      email: connection.email,
+    };
+
+    if (connection.provider === 'imap') {
+      credentials.imapServer = connection.imapHost;
+      credentials.imapPort = connection.imapPort;
+      credentials.imapUsername = connection.imapUsername;
+      credentials.imapPassword = decrypted.imapPassword;
+    } else {
+      // OAuth providers
+      credentials.accessToken = decrypted.accessToken;
+      credentials.refreshToken = decrypted.refreshToken;
+    }
+
+    // Send to Stage Updater
+    await credentialTransmissionService.sendCredentials(
+      userId,
+      connection.provider as any,
+      credentials,
+      { requestId }
+    );
+
+    logger.info(
+      { userId, connectionId, provider: connection.provider, requestId },
+      'Manually synced credentials to Stage Updater'
+    );
+
+    return {
+      success: true,
+      message: 'Credentials successfully sent to Stage Updater',
+    };
+  },
 };
