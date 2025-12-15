@@ -352,8 +352,8 @@ export const timerHandlers = {
             const { userEmail, company, position, location } = userAndJob[0];
             
             // Escape HTML to prevent injection
-            const companyName = escapeHtml(company || 'the company');
-            const positionTitle = escapeHtml(position || 'the position');
+            const companyName = escapeHtml(company || 'Unknown Company');
+            const positionTitle = escapeHtml(position || 'Unknown Position');
             const jobLocation = location ? escapeHtml(location) : null;
 
             // Send follow-up email
