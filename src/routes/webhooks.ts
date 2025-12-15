@@ -20,7 +20,20 @@ const webhooks = new Hono<AppContext>();
 const statusUpdateSchema = z.object({
   applicationId: z.string().uuid(),
   userId: z.string(),
-  newStage: z.string(),
+  newStage: z.enum([
+    'Syncing',
+    'CV Check',
+    'Message Check',
+    'Being Applied',
+    'Applied',
+    'Interview 1',
+    'Next Interviews',
+    'Offer',
+    'Rejected',
+    'Accepted',
+    'Withdrawn',
+    'Failed',
+  ]),
   metadata: z.record(z.unknown()).optional(),
   timestamp: z.string(),
 });
@@ -75,10 +88,11 @@ webhooks.post('/status-update', async (c) => {
   console.log('Received status update webhook:', data);
 
   // Update application stage in database
+  // The validated data is guaranteed to be a valid stage enum due to the schema validation
   await applicationService.updateApplicationStage(
     data.userId,
     data.applicationId,
-    data.newStage as any
+    data.newStage as 'Syncing' | 'CV Check' | 'Message Check' | 'Being Applied' | 'Applied' | 'Interview 1' | 'Next Interviews' | 'Offer' | 'Rejected' | 'Accepted' | 'Withdrawn' | 'Failed'
   );
 
   // Create notification for user

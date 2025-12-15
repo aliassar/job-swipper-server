@@ -6,7 +6,7 @@ import { workflowService } from './workflow.service';
 import { notificationService } from './notification.service';
 import { timerService } from './timer.service';
 import { storage } from '../lib/storage';
-import { extractS3KeyFromUrl } from '../lib/utils';
+import { extractS3KeyFromUrl, escapeHtml } from '../lib/utils';
 import { emailClient } from '../lib/email-client';
 
 export interface Timer {
@@ -333,30 +333,32 @@ export const timerHandlers = {
       if (settings.length > 0 && settings[0].autoFollowUpEnabled) {
         // Send automated follow-up email
         try {
-          // Get user email
-          const user = await db
-            .select()
+          // Get user and job details in one query
+          const userAndJob = await db
+            .select({
+              userEmail: users.email,
+              company: jobs.company,
+              position: jobs.position,
+              location: jobs.location,
+            })
             .from(users)
+            .innerJoin(jobs, eq(jobs.id, app.jobId))
             .where(eq(users.id, userId))
             .limit(1);
 
-          if (user.length === 0) {
-            logger.warn({ userId }, 'User not found for follow-up email');
+          if (userAndJob.length === 0) {
+            logger.warn({ userId }, 'User or job not found for follow-up email');
           } else {
-            // Get job details
-            const jobDetails = await db
-              .select()
-              .from(jobs)
-              .where(eq(jobs.id, app.jobId))
-              .limit(1);
-
-            const job = jobDetails.length > 0 ? jobDetails[0] : null;
-            const companyName = job?.company || 'the company';
-            const positionTitle = job?.position || 'the position';
+            const { userEmail, company, position, location } = userAndJob[0];
+            
+            // Escape HTML to prevent injection
+            const companyName = escapeHtml(company || 'the company');
+            const positionTitle = escapeHtml(position || 'the position');
+            const jobLocation = location ? escapeHtml(location) : null;
 
             // Send follow-up email
             await emailClient.sendEmail({
-              to: user[0].email,
+              to: userEmail,
               subject: `Follow-up Reminder: ${companyName} - ${positionTitle}`,
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -366,7 +368,7 @@ export const timerHandlers = {
                   <div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 20px 0;">
                     <p style="margin: 0;"><strong>Company:</strong> ${companyName}</p>
                     <p style="margin: 8px 0 0 0;"><strong>Position:</strong> ${positionTitle}</p>
-                    ${job?.location ? `<p style="margin: 8px 0 0 0;"><strong>Location:</strong> ${job.location}</p>` : ''}
+                    ${jobLocation ? `<p style="margin: 8px 0 0 0;"><strong>Location:</strong> ${jobLocation}</p>` : ''}
                   </div>
                   <p>Following up with hiring managers can demonstrate your continued interest and keep your application top of mind.</p>
                   <p>Consider sending a polite follow-up message inquiring about the status of your application.</p>
@@ -377,7 +379,7 @@ export const timerHandlers = {
               `,
             });
 
-            logger.info({ applicationId, followUpCount, userEmail: user[0].email }, 'Auto follow-up email sent');
+            logger.info({ applicationId, followUpCount, userEmail }, 'Auto follow-up email sent');
           }
         } catch (error) {
           logger.error({ error, applicationId, followUpCount }, 'Failed to send automated follow-up email');

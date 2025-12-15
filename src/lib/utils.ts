@@ -49,3 +49,17 @@ export function extractS3KeyFromUrl(fileUrl: string): string {
     return keyParts.join('/');
   }
 }
+
+/**
+ * Escape HTML special characters to prevent HTML injection
+ */
+export function escapeHtml(text: string): string {
+  const htmlEscapeMap: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+  };
+  return text.replace(/[&<>"']/g, (char) => htmlEscapeMap[char] || char);
+}
