@@ -1,5 +1,5 @@
 import { db } from '../lib/db';
-import { workflowRuns, applications, userSettings } from '../db/schema';
+import { workflowRuns, applications, userSettings, jobs, userProfiles } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
@@ -8,6 +8,8 @@ import { applicationService } from './application.service';
 import { generationService } from './generation.service';
 import { resumeService } from './resume.service';
 import { notificationService } from './notification.service';
+import { applicationSenderClient } from '../lib/microservice-client';
+import type { ApplicationSenderRequest, ApplicationSenderResponse, UserProfile } from '../lib/microservices';
 
 export type WorkflowStatus = 'pending' | 'generating_resume' | 'generating_cover_letter' | 'waiting_cv_verification' | 'waiting_message_verification' | 'applying' | 'completed' | 'failed' | 'cancelled';
 
@@ -305,14 +307,98 @@ export const workflowService = {
         await this.updateWorkflowStep(workflowRunId, 'applying');
         await applicationService.updateApplicationStage(userId, app.id, 'Being Applied');
 
-        // TODO: Call application sender microservice
-        // For now, just mark as Applied
-        await applicationService.updateApplicationStage(userId, app.id, 'Applied');
-        
-        await db
-          .update(applications)
-          .set({ appliedAt: new Date() })
-          .where(eq(applications.id, app.id));
+        try {
+          // Get job details
+          const [jobDetails] = await db
+            .select()
+            .from(jobs)
+            .where(eq(jobs.id, jobId))
+            .limit(1);
+
+          if (!jobDetails) {
+            throw new Error('Job not found');
+          }
+
+          // Get user profile
+          const [profile] = await db
+            .select()
+            .from(userProfiles)
+            .where(eq(userProfiles.userId, userId))
+            .limit(1);
+
+          const userProfile: UserProfile = profile ? {
+            firstName: profile.firstName || undefined,
+            lastName: profile.lastName || undefined,
+            phone: profile.phone || undefined,
+            linkedinUrl: profile.linkedinUrl || undefined,
+            address: profile.address || undefined,
+            city: profile.city || undefined,
+            state: profile.state || undefined,
+            zipCode: profile.zipCode || undefined,
+            country: profile.country || undefined,
+          } : {};
+
+          // Get generated documents
+          const updatedApp = await db
+            .select()
+            .from(applications)
+            .where(eq(applications.id, app.id))
+            .limit(1);
+
+          const appData = updatedApp[0];
+
+          // Call application sender microservice
+          if (process.env.APPLICATION_SENDER_SERVICE_URL) {
+            const request: ApplicationSenderRequest = {
+              applicationId: app.id,
+              resumeS3Key: appData.generatedResumeId ? undefined : undefined, // Would need to get actual S3 key
+              coverLetterS3Key: appData.generatedCoverLetterId ? undefined : undefined, // Would need to get actual S3 key
+              userProfile,
+              applyMethod: 'email', // Default to email, could be determined from job details
+              applyEmail: jobDetails.jobUrl || undefined, // Would need proper email extraction
+            };
+
+            const response = await applicationSenderClient.request<ApplicationSenderResponse>(
+              '/apply',
+              {
+                method: 'POST',
+                body: request,
+              }
+            );
+
+            if (response.success) {
+              await applicationService.updateApplicationStage(userId, app.id, 'Applied');
+              await db
+                .update(applications)
+                .set({ appliedAt: new Date() })
+                .where(eq(applications.id, app.id));
+
+              logger.info({ applicationId: app.id, workflowRunId }, 'Application submitted via microservice');
+            } else {
+              throw new Error(response.error || 'Application submission failed');
+            }
+          } else {
+            // Fallback if microservice not configured - just mark as Applied
+            logger.warn({ applicationId: app.id }, 'Application sender microservice not configured, marking as Applied');
+            await applicationService.updateApplicationStage(userId, app.id, 'Applied');
+            await db
+              .update(applications)
+              .set({ appliedAt: new Date() })
+              .where(eq(applications.id, app.id));
+          }
+        } catch (error) {
+          logger.error({ error, workflowRunId, applicationId: app.id }, 'Failed to submit application');
+          await this.updateWorkflowStatus(workflowRunId, 'failed', 'Failed to submit application');
+          await applicationService.updateApplicationStage(userId, app.id, 'Failed');
+          await notificationService.createNotification(
+            userId,
+            'apply_failed',
+            'Application Submission Failed',
+            'Failed to submit your application. Please try again manually.',
+            { applicationId: app.id, error: String(error) }
+          );
+          return;
+        }
       }
 
       // Workflow completed

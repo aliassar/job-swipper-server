@@ -4,7 +4,8 @@ import { eq, and, desc, sql, like, or, SQL, not, inArray } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
-import { workflowService } from './workflow.service';
+import { jobFilterClient } from '../lib/microservice-client';
+import type { JobFilterRequest, JobFilterResponse, FilterType } from '../lib/microservices';
 
 export const jobService = {
   async getPendingJobs(
@@ -577,7 +578,38 @@ export const jobService = {
         await this.blockCompany(userId, job.company, 'Reported via dont_recommend_company');
       }
 
-      // TODO: Notify filtering microservice based on settings
+      // Notify filtering microservice based on reason
+      try {
+        const filterType: FilterType = 
+          reason === 'fake' ? 'fake' : 
+          reason === 'dont_recommend_company' ? 'company_block' : 
+          'not_interested';
+
+        const filterRequest: JobFilterRequest = {
+          jobId,
+          userId,
+          filterType,
+          companyName: job.company,
+          jobDetails: {
+            position: job.position,
+            description: job.description || undefined,
+            requirements: job.requirements || undefined,
+            location: job.location || undefined,
+          },
+        };
+
+        if (process.env.JOB_FILTER_SERVICE_URL) {
+          await jobFilterClient.request<JobFilterResponse>('/filter/add', {
+            method: 'POST',
+            body: filterRequest,
+          });
+          logger.info({ userId, jobId, filterType }, 'Notified job filtering microservice');
+        }
+      } catch (error) {
+        logger.error({ error, userId, jobId, reason }, 'Failed to notify job filtering microservice');
+        // Don't fail the report operation if microservice call fails
+      }
+
       logger.info({ userId, jobId, reason }, 'Job reported');
 
       // Record action history
@@ -621,7 +653,40 @@ export const jobService = {
         .delete(reportedJobs)
         .where(eq(reportedJobs.id, report.id));
 
-      // TODO: Notify filtering microservice to remove filters
+      // Notify filtering microservice to remove filters
+      try {
+        if (process.env.JOB_FILTER_SERVICE_URL) {
+          const job = await this.getJobWithStatus(userId, jobId);
+          
+          const filterType: FilterType = 
+            report.reason === 'fake' ? 'fake' : 
+            report.reason === 'dont_recommend_company' ? 'company_block' : 
+            'not_interested';
+
+          const filterRequest: JobFilterRequest = {
+            jobId,
+            userId,
+            filterType,
+            companyName: job.company,
+            jobDetails: {
+              position: job.position,
+              description: job.description || undefined,
+              requirements: job.requirements || undefined,
+              location: job.location || undefined,
+            },
+          };
+
+          await jobFilterClient.request<JobFilterResponse>('/filter/remove', {
+            method: 'POST',
+            body: filterRequest,
+          });
+          logger.info({ userId, jobId, filterType }, 'Notified job filtering microservice to remove filter');
+        }
+      } catch (error) {
+        logger.error({ error, userId, jobId }, 'Failed to notify job filtering microservice');
+        // Don't fail the unreport operation if microservice call fails
+      }
+
       logger.info({ userId, jobId }, 'Job unreported');
 
       // Record action history

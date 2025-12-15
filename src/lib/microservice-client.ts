@@ -93,3 +93,13 @@ export const aiFilteringClient = new MicroserviceClient({
   baseUrl: process.env.AI_FILTERING_SERVICE_URL || '',
   apiKey: process.env.AI_FILTERING_SERVICE_KEY || '',
 });
+
+export const jobFilterClient = new MicroserviceClient({
+  baseUrl: process.env.JOB_FILTER_SERVICE_URL || '',
+  apiKey: process.env.JOB_FILTER_SERVICE_KEY || '',
+});
+
+export const applicationSenderClient = new MicroserviceClient({
+  baseUrl: process.env.APPLICATION_SENDER_SERVICE_URL || '',
+  apiKey: process.env.APPLICATION_SENDER_SERVICE_KEY || '',
+});

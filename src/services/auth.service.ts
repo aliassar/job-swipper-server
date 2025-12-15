@@ -5,6 +5,7 @@ import { ValidationError, AuthenticationError } from '../lib/errors';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { emailClient } from '../lib/email-client';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -110,8 +111,8 @@ export const authService = {
       used: false,
     });
 
-    // TODO: Send verification email
-    // await emailClient.sendVerificationEmail(email, verificationToken);
+    // Send verification email
+    await emailClient.sendVerificationEmail(email, verificationToken);
 
     const user: AuthUser = {
       id: newUser.id,
@@ -215,8 +216,8 @@ export const authService = {
       used: false,
     });
 
-    // TODO: Send email with reset link
-    // await emailClient.sendPasswordResetEmail(email, token, requestId);
+    // Send email with reset link
+    await emailClient.sendPasswordResetEmail(email, token, _requestId);
 
     return { message: 'Password reset email sent if account exists' };
   },
@@ -262,24 +263,186 @@ export const authService = {
   /**
    * OAuth token exchange for Google
    */
-  async googleOAuthCallback(_code: string): Promise<{ user: AuthUser; token: string }> {
-    // TODO: Implement Google OAuth token exchange
-    // 1. Exchange code for access token with Google
-    // 2. Get user info from Google
-    // 3. Create or find user in database
-    // 4. Generate JWT token
-    throw new Error('Google OAuth not yet implemented');
+  async googleOAuthCallback(code: string): Promise<{ user: AuthUser; token: string }> {
+    // Exchange code for access token with Google
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new AuthenticationError('Failed to exchange Google OAuth code');
+    }
+
+    const tokenData = await tokenResponse.json() as { access_token: string };
+    const accessToken = tokenData.access_token;
+
+    // Get user info from Google
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userInfoResponse.ok) {
+      throw new AuthenticationError('Failed to get user info from Google');
+    }
+
+    const userInfo = await userInfoResponse.json() as { email: string; id: string };
+    const { email, id: oauthId } = userInfo;
+
+    // Find or create user in database
+    let [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!user) {
+      // Create new user
+      [user] = await db
+        .insert(users)
+        .values({
+          email,
+          oauthProvider: 'google',
+          oauthId,
+          emailVerified: true, // OAuth emails are pre-verified
+        })
+        .returning();
+    } else if (user.oauthProvider !== 'google') {
+      // Update existing email/password user to link Google
+      await db
+        .update(users)
+        .set({
+          oauthProvider: 'google',
+          oauthId,
+          emailVerified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    }
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      emailVerified: true,
+    };
+
+    const jwtToken = this.generateToken(authUser);
+
+    return { user: authUser, token: jwtToken };
   },
 
   /**
    * OAuth token exchange for GitHub
    */
-  async githubOAuthCallback(_code: string): Promise<{ user: AuthUser; token: string }> {
-    // TODO: Implement GitHub OAuth token exchange
-    // 1. Exchange code for access token with GitHub
-    // 2. Get user info from GitHub
-    // 3. Create or find user in database
-    // 4. Generate JWT token
-    throw new Error('GitHub OAuth not yet implemented');
+  async githubOAuthCallback(code: string): Promise<{ user: AuthUser; token: string }> {
+    // Exchange code for access token with GitHub
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID || '',
+        client_secret: process.env.GITHUB_CLIENT_SECRET || '',
+        code,
+        redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/github`,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new AuthenticationError('Failed to exchange GitHub OAuth code');
+    }
+
+    const tokenData = await tokenResponse.json() as { access_token: string };
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      throw new AuthenticationError('No access token received from GitHub');
+    }
+
+    // Get user info from GitHub
+    const userInfoResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!userInfoResponse.ok) {
+      throw new AuthenticationError('Failed to get user info from GitHub');
+    }
+
+    const userInfo = await userInfoResponse.json() as { id: number };
+    const oauthId = String(userInfo.id);
+
+    // Get primary email from GitHub
+    const emailsResponse = await fetch('https://api.github.com/user/emails', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!emailsResponse.ok) {
+      throw new AuthenticationError('Failed to get email from GitHub');
+    }
+
+    const emails = await emailsResponse.json() as Array<{ email: string; primary: boolean; verified: boolean }>;
+    const primaryEmail = emails.find((e) => e.primary && e.verified);
+    
+    if (!primaryEmail) {
+      throw new AuthenticationError('No verified primary email found in GitHub account');
+    }
+
+    const email = primaryEmail.email;
+
+    // Find or create user in database
+    let [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!user) {
+      // Create new user
+      [user] = await db
+        .insert(users)
+        .values({
+          email,
+          oauthProvider: 'github',
+          oauthId,
+          emailVerified: true, // OAuth emails are pre-verified
+        })
+        .returning();
+    } else if (user.oauthProvider !== 'github') {
+      // Update existing email/password user to link GitHub
+      await db
+        .update(users)
+        .set({
+          oauthProvider: 'github',
+          oauthId,
+          emailVerified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    }
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      emailVerified: true,
+    };
+
+    const jwtToken = this.generateToken(authUser);
+
+    return { user: authUser, token: jwtToken };
   },
 };
