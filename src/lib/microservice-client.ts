@@ -103,3 +103,8 @@ export const applicationSenderClient = new MicroserviceClient({
   baseUrl: process.env.APPLICATION_SENDER_SERVICE_URL || '',
   apiKey: process.env.APPLICATION_SENDER_SERVICE_KEY || '',
 });
+
+export const stageUpdaterClient = new MicroserviceClient({
+  baseUrl: process.env.STAGE_UPDATER_SERVICE_URL || '',
+  apiKey: process.env.STAGE_UPDATER_SERVICE_KEY || '',
+});

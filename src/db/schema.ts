@@ -112,6 +112,11 @@ export const emailConnections = pgTable('email_connections', {
   imapPort: integer('imap_port'),
   imapUsername: text('imap_username'),
   imapPassword: text('imap_password'),
+  // Encrypted credential fields for secure storage
+  encryptedAccessToken: text('encrypted_access_token'),
+  encryptedRefreshToken: text('encrypted_refresh_token'),
+  encryptedImapPassword: text('encrypted_imap_password'),
+  encryptionIv: text('encryption_iv'), // Initialization Vector for AES-GCM encryption
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

@@ -127,3 +127,29 @@ export interface ApplicationSubmittedWebhook {
   confirmationId?: string;
   error?: string;
 }
+
+// ==================== Stage Updater Service ====================
+
+export type EmailProvider = 'gmail' | 'yahoo' | 'outlook' | 'imap';
+
+export interface EmailCredentials {
+  email: string;
+  accessToken?: string;
+  refreshToken?: string;
+  imapServer?: string;
+  imapPort?: number;
+  imapUsername?: string;
+  imapPassword?: string;
+}
+
+export interface StageUpdaterCredentialsRequest {
+  userId: string;
+  provider: EmailProvider;
+  credentials: EmailCredentials;
+}
+
+export interface StageUpdaterCredentialsResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
