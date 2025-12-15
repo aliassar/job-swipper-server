@@ -5,6 +5,7 @@ import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { storage } from '../lib/storage';
 import { timerService } from './timer.service';
+import PDFDocument from 'pdfkit';
 
 export const applicationService = {
   async getApplications(userId: string, page: number = 1, limit: number = 20, search?: string) {
@@ -537,22 +538,106 @@ export const applicationService = {
   },
 
   /**
-   * Export applications to PDF (simplified)
+   * Export applications to PDF
+   * Returns a Buffer containing the PDF document
    */
-  async exportApplicationsToPDF(applications: any[]): Promise<string> {
-    // For now, return a simple text representation
-    // In a real implementation, you would use a PDF library like pdfkit
-    const content = applications.map((app) => {
-      return `Company: ${app.job.company}
-Position: ${app.job.position}
-Location: ${app.job.location || 'N/A'}
-Salary: ${app.job.salary || 'N/A'}
-Stage: ${app.stage}
-Applied At: ${app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'N/A'}
-Notes: ${app.notes || 'N/A'}
----`;
-    }).join('\n\n');
+  async exportApplicationsToPDF(applications: any[]): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margins: { top: 50, bottom: 50, left: 50, right: 50 },
+        });
 
-    return content;
+        const buffers: Buffer[] = [];
+
+        // Collect PDF data
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', () => {
+          const pdfBuffer = Buffer.concat(buffers);
+          resolve(pdfBuffer);
+        });
+        doc.on('error', reject);
+
+        // Title
+        doc.fontSize(20).font('Helvetica-Bold').text('Job Applications Report', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(10).font('Helvetica').text(`Generated on ${new Date().toLocaleString()}`, { align: 'center' });
+        doc.moveDown(2);
+
+        // Table headers
+        doc.fontSize(12).font('Helvetica-Bold');
+
+        if (applications.length === 0) {
+          doc.fontSize(12).font('Helvetica').text('No applications found.', { align: 'center' });
+        } else {
+          // Iterate through applications
+          applications.forEach((app, index) => {
+            if (index > 0) {
+              doc.moveDown();
+              doc.strokeColor('#cccccc').lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+              doc.moveDown();
+            }
+
+            // Application details
+            doc.fontSize(14).font('Helvetica-Bold').fillColor('#333333');
+            doc.text(`${index + 1}. ${app.job.company} - ${app.job.position}`, { continued: false });
+            doc.moveDown(0.5);
+
+            doc.fontSize(10).font('Helvetica').fillColor('#666666');
+
+            // Location
+            if (app.job.location) {
+              doc.text(`Location: ${app.job.location}`);
+            }
+
+            // Salary
+            if (app.job.salary) {
+              doc.text(`Salary: ${app.job.salary}`);
+            }
+
+            // Stage
+            doc.fillColor('#000000').font('Helvetica-Bold').text(`Stage: `, { continued: true });
+            doc.font('Helvetica').text(app.stage);
+
+            // Applied date
+            if (app.appliedAt) {
+              doc.font('Helvetica-Bold').text(`Applied: `, { continued: true });
+              doc.font('Helvetica').text(new Date(app.appliedAt).toLocaleDateString());
+            }
+
+            // Notes
+            if (app.notes) {
+              doc.moveDown(0.5);
+              doc.font('Helvetica-Bold').text('Notes: ', { continued: true });
+              doc.font('Helvetica').text(app.notes, { width: 495 });
+            }
+
+            // Check if we need a new page
+            if (doc.y > 700 && index < applications.length - 1) {
+              doc.addPage();
+            }
+          });
+        }
+
+        // Footer
+        const pageCount = doc.bufferedPageRange().count;
+        for (let i = 0; i < pageCount; i++) {
+          doc.switchToPage(i);
+          doc.fontSize(8).font('Helvetica').fillColor('#999999');
+          doc.text(
+            `Page ${i + 1} of ${pageCount}`,
+            50,
+            doc.page.height - 30,
+            { align: 'center' }
+          );
+        }
+
+        // Finalize the PDF
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
   },
 };

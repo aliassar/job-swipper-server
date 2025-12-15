@@ -4,9 +4,6 @@ import { AppContext } from '../types';
 import { jobService } from '../services/job.service';
 import { formatResponse, parseIntSafe } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
-import { db } from '../lib/db';
-import { reportedJobs } from '../db/schema';
-import { and, eq } from 'drizzle-orm';
 
 const jobs = new Hono<AppContext>();
 

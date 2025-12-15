@@ -72,11 +72,16 @@ applicationHistory.get('/export', async (c) => {
     c.header('Content-Disposition', `attachment; filename="applications-${Date.now()}.csv"`);
     return c.body(csvContent);
   } else {
-    const pdfContent = await applicationService.exportApplicationsToPDF(result.items);
+    const pdfBuffer = await applicationService.exportApplicationsToPDF(result.items);
     
-    c.header('Content-Type', 'text/plain'); // Would be application/pdf with real PDF library
-    c.header('Content-Disposition', `attachment; filename="applications-${Date.now()}.txt"`);
-    return c.body(pdfContent);
+    c.header('Content-Type', 'application/pdf');
+    c.header('Content-Disposition', `attachment; filename="applications-${Date.now()}.pdf"`);
+    return new Response(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="applications-${Date.now()}.pdf"`,
+      },
+    });
   }
 });
 

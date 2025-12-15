@@ -1,10 +1,7 @@
 import { db } from '../lib/db';
 import { jobs, userJobStatus, actionHistory, userSettings, applications, blockedCompanies, reportedJobs, workflowRuns } from '../db/schema';
-import { eq, and, desc, sql, like, or, SQL, notIn, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, sql, like, or, SQL, not, inArray } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
-import { generationService } from './generation.service';
-import { applicationService } from './application.service';
-import { resumeService } from './resume.service';
 import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
 import { workflowService } from './workflow.service';
@@ -54,7 +51,7 @@ export const jobService = {
 
     // Exclude blocked companies
     if (blockedCompanyNames.length > 0) {
-      query = query.where(notIn(jobs.company, blockedCompanyNames));
+      query = query.where(not(inArray(jobs.company, blockedCompanyNames)));
     }
 
     // Add search if provided

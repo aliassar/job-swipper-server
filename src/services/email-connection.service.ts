@@ -3,6 +3,7 @@ import { emailConnections } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
+import nodemailer from 'nodemailer';
 
 export type EmailProvider = 'gmail' | 'outlook' | 'yahoo' | 'imap';
 
@@ -104,7 +105,7 @@ export const emailConnectionService = {
       throw new Error('Failed to authenticate with Gmail');
     }
 
-    const tokens: OAuthTokenResponse = await tokenResponse.json();
+    const tokens = await tokenResponse.json() as OAuthTokenResponse;
 
     // Get user email from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -190,7 +191,7 @@ export const emailConnectionService = {
       throw new Error('Failed to authenticate with Outlook');
     }
 
-    const tokens: OAuthTokenResponse = await tokenResponse.json();
+    const tokens = await tokenResponse.json() as OAuthTokenResponse;
 
     // Get user email from Microsoft Graph
     const userInfoResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
@@ -277,7 +278,7 @@ export const emailConnectionService = {
       throw new Error('Failed to authenticate with Yahoo');
     }
 
-    const tokens: OAuthTokenResponse = await tokenResponse.json();
+    const tokens = await tokenResponse.json() as OAuthTokenResponse;
 
     // Get user email - Yahoo provides it in the token response or we need to call userinfo
     const userInfoResponse = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
@@ -342,15 +343,33 @@ export const emailConnectionService = {
 
   /**
    * Test IMAP connection
-   * TODO: Implement actual IMAP connection test using nodemailer or similar library
-   * For production, this should validate credentials before saving
+   * Validates credentials by attempting to connect to the IMAP server
    */
   async testImapConnection(host: string, port: number, username: string, password: string): Promise<boolean> {
-    // Mock implementation - in production, would use nodemailer to test connection:
-    // const transporter = nodemailer.createTransport({ host, port, auth: { user: username, pass: password }});
-    // await transporter.verify();
-    logger.warn({ host, port, username }, 'IMAP connection test is mocked - implement for production');
-    return true;
+    try {
+      // Create a transporter with the IMAP credentials
+      const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 993, // Use SSL/TLS for port 993
+        auth: {
+          user: username,
+          pass: password,
+        },
+        // Increase timeout for slow servers
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+      });
+
+      // Verify the connection
+      await transporter.verify();
+      
+      logger.info({ host, port, username }, 'IMAP connection test successful');
+      return true;
+    } catch (error) {
+      logger.error({ error, host, port, username }, 'IMAP connection test failed');
+      return false;
+    }
   },
 
   /**
@@ -472,7 +491,7 @@ export const emailConnectionService = {
       throw new Error('Failed to refresh token');
     }
 
-    const tokens: OAuthTokenResponse = await tokenResponse.json();
+    const tokens = await tokenResponse.json() as OAuthTokenResponse;
 
     // Update connection
     const tokenExpiresAt = tokens.expires_in
