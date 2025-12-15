@@ -291,6 +291,8 @@ describe('API Endpoint Reliability Tests', () => {
           id: mockApplicationId,
           generatedResume: null,
           generatedCoverLetter: null,
+          customResumeUrl: null,
+          customCoverLetterUrl: null,
         };
 
         vi.spyOn(applicationService, 'getApplicationDetails').mockResolvedValue(mockApplication as any);
@@ -299,6 +301,25 @@ describe('API Endpoint Reliability Tests', () => {
 
         expect(result.generatedResume).toBeNull();
         expect(result.generatedCoverLetter).toBeNull();
+        expect(result.customResumeUrl).toBeNull();
+        expect(result.customCoverLetterUrl).toBeNull();
+      });
+
+      it('should return custom document URLs when present', async () => {
+        const mockApplication = {
+          id: mockApplicationId,
+          generatedResume: null,
+          generatedCoverLetter: null,
+          customResumeUrl: 'https://example.com/my-resume.pdf',
+          customCoverLetterUrl: 'https://example.com/my-cover-letter.pdf',
+        };
+
+        vi.spyOn(applicationService, 'getApplicationDetails').mockResolvedValue(mockApplication as any);
+
+        const result = await applicationService.getApplicationDetails(mockUserId, mockApplicationId);
+
+        expect(result.customResumeUrl).toBe('https://example.com/my-resume.pdf');
+        expect(result.customCoverLetterUrl).toBe('https://example.com/my-cover-letter.pdf');
       });
     });
 

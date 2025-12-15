@@ -247,6 +247,8 @@ applications.get('/:id/documents', async (c) => {
       fileName: application.generatedCoverLetter.filename,
       createdAt: application.generatedCoverLetter.createdAt,
     } : null,
+    customResumeUrl: application.customResumeUrl,
+    customCoverLetterUrl: application.customCoverLetterUrl,
   };
 
   return c.json(formatResponse(true, documents, null, requestId));

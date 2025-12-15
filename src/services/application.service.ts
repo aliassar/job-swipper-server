@@ -651,11 +651,7 @@ export const applicationService = {
     coverLetterUrl?: string | null
   ) {
     // Verify application belongs to user
-    const application = await this.getApplicationById(userId, applicationId);
-    
-    if (!application) {
-      throw new NotFoundError('Application');
-    }
+    await this.getApplicationById(userId, applicationId);
 
     // Update the application with custom document URLs
     const updated = await db
