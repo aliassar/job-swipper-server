@@ -257,7 +257,7 @@ export const emailConnectionService = {
     const email = userInfo.email;
 
     if (!email) {
-      logger.error({ userId, userInfo }, 'Gmail user info missing email address');
+      logger.error({ userId }, 'Gmail user info missing email address');
       throw new Error('Unable to retrieve email address from Gmail');
     }
 
@@ -416,7 +416,7 @@ export const emailConnectionService = {
     const email = userInfo.mail || userInfo.userPrincipalName;
 
     if (!email) {
-      logger.error({ userId, userInfo }, 'Outlook user info missing email address');
+      logger.error({ userId }, 'Outlook user info missing email address');
       throw new Error('Unable to retrieve email address from Outlook');
     }
 
@@ -572,7 +572,7 @@ export const emailConnectionService = {
     const email = userInfo.email;
 
     if (!email) {
-      logger.error({ userId, userInfo }, 'Yahoo user info missing email address');
+      logger.error({ userId }, 'Yahoo user info missing email address');
       throw new Error('Unable to retrieve email address from Yahoo');
     }
 
