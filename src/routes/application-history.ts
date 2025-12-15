@@ -1,20 +1,10 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { AppContext } from '../types';
 import { applicationService } from '../services/application.service';
 import { formatResponse, parseIntSafe } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
 
 const applicationHistory = new Hono<AppContext>();
-
-// Validation schemas - reserved for future use
-// const exportSchema = z.object({
-//   format: z.enum(['csv', 'pdf']),
-//   startDate: z.string().optional(),
-//   endDate: z.string().optional(),
-//   stage: z.string().optional(),
-//   search: z.string().optional(),
-// });
 
 // GET /api/application-history - Query params: startDate, endDate, search, stage, page, limit
 applicationHistory.get('/', async (c) => {
