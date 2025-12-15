@@ -34,6 +34,11 @@ const updateMessageSchema = z.object({
   message: z.string(),
 });
 
+const updateDocumentsSchema = z.object({
+  resumeUrl: z.string().url().optional().nullable(),
+  coverLetterUrl: z.string().url().optional().nullable(),
+});
+
 // GET /api/applications - Get applications
 applications.get('/', async (c) => {
   const auth = c.get('auth');
@@ -219,6 +224,53 @@ applications.post('/:id/toggle-auto-status', async (c) => {
   const applicationId = c.req.param('id');
 
   const application = await applicationService.toggleAutoStatus(auth.userId, applicationId);
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// GET /api/applications/:id/documents - Get application documents
+applications.get('/:id/documents', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.getApplicationDetails(auth.userId, applicationId);
+
+  const documents = {
+    generatedResume: application.generatedResume ? {
+      fileUrl: application.generatedResume.fileUrl,
+      fileName: application.generatedResume.fileName,
+      createdAt: application.generatedResume.createdAt,
+    } : null,
+    generatedCoverLetter: application.generatedCoverLetter ? {
+      fileUrl: application.generatedCoverLetter.fileUrl,
+      fileName: application.generatedCoverLetter.fileName,
+      createdAt: application.generatedCoverLetter.createdAt,
+    } : null,
+  };
+
+  return c.json(formatResponse(true, documents, null, requestId));
+});
+
+// PUT /api/applications/:id/documents - Update custom document URLs
+applications.put('/:id/documents', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const body = await c.req.json();
+  const validated = updateDocumentsSchema.safeParse(body);
+
+  if (!validated.success) {
+    throw new ValidationError('Invalid request body', validated.error.errors);
+  }
+
+  const application = await applicationService.updateCustomDocuments(
+    auth.userId,
+    applicationId,
+    validated.data.resumeUrl,
+    validated.data.coverLetterUrl
+  );
 
   return c.json(formatResponse(true, application, null, requestId));
 });

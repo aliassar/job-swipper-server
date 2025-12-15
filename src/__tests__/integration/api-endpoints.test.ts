@@ -253,6 +253,104 @@ describe('API Endpoint Reliability Tests', () => {
         expect(result.stage).toBe('Applied');
       });
     });
+
+    describe('GET /api/applications/:id/documents - Get Application Documents', () => {
+      it('should return application documents successfully', async () => {
+        const mockApplication = {
+          id: mockApplicationId,
+          generatedResume: {
+            fileUrl: 'https://example.com/resume.pdf',
+            fileName: 'resume.pdf',
+            createdAt: new Date(),
+          },
+          generatedCoverLetter: {
+            fileUrl: 'https://example.com/cover-letter.pdf',
+            fileName: 'cover-letter.pdf',
+            createdAt: new Date(),
+          },
+        };
+
+        vi.spyOn(applicationService, 'getApplicationDetails').mockResolvedValue(mockApplication as any);
+
+        const result = await applicationService.getApplicationDetails(mockUserId, mockApplicationId);
+
+        expect(result.generatedResume).toBeDefined();
+        expect(result.generatedResume.fileUrl).toBe('https://example.com/resume.pdf');
+        expect(result.generatedCoverLetter).toBeDefined();
+        expect(result.generatedCoverLetter.fileUrl).toBe('https://example.com/cover-letter.pdf');
+      });
+
+      it('should return null for missing documents', async () => {
+        const mockApplication = {
+          id: mockApplicationId,
+          generatedResume: null,
+          generatedCoverLetter: null,
+        };
+
+        vi.spyOn(applicationService, 'getApplicationDetails').mockResolvedValue(mockApplication as any);
+
+        const result = await applicationService.getApplicationDetails(mockUserId, mockApplicationId);
+
+        expect(result.generatedResume).toBeNull();
+        expect(result.generatedCoverLetter).toBeNull();
+      });
+    });
+
+    describe('PUT /api/applications/:id/documents - Update Custom Document URLs', () => {
+      it('should update custom document URLs successfully', async () => {
+        vi.spyOn(applicationService, 'updateCustomDocuments').mockResolvedValue({
+          id: mockApplicationId,
+          customResumeUrl: 'https://example.com/custom-resume.pdf',
+          customCoverLetterUrl: 'https://example.com/custom-cover-letter.pdf',
+        } as any);
+
+        const result = await applicationService.updateCustomDocuments(
+          mockUserId,
+          mockApplicationId,
+          'https://example.com/custom-resume.pdf',
+          'https://example.com/custom-cover-letter.pdf'
+        );
+
+        expect(result.customResumeUrl).toBe('https://example.com/custom-resume.pdf');
+        expect(result.customCoverLetterUrl).toBe('https://example.com/custom-cover-letter.pdf');
+      });
+
+      it('should update only resume URL', async () => {
+        vi.spyOn(applicationService, 'updateCustomDocuments').mockResolvedValue({
+          id: mockApplicationId,
+          customResumeUrl: 'https://example.com/custom-resume.pdf',
+          customCoverLetterUrl: null,
+        } as any);
+
+        const result = await applicationService.updateCustomDocuments(
+          mockUserId,
+          mockApplicationId,
+          'https://example.com/custom-resume.pdf',
+          null
+        );
+
+        expect(result.customResumeUrl).toBe('https://example.com/custom-resume.pdf');
+        expect(result.customCoverLetterUrl).toBeNull();
+      });
+
+      it('should update only cover letter URL', async () => {
+        vi.spyOn(applicationService, 'updateCustomDocuments').mockResolvedValue({
+          id: mockApplicationId,
+          customResumeUrl: null,
+          customCoverLetterUrl: 'https://example.com/custom-cover-letter.pdf',
+        } as any);
+
+        const result = await applicationService.updateCustomDocuments(
+          mockUserId,
+          mockApplicationId,
+          null,
+          'https://example.com/custom-cover-letter.pdf'
+        );
+
+        expect(result.customResumeUrl).toBeNull();
+        expect(result.customCoverLetterUrl).toBe('https://example.com/custom-cover-letter.pdf');
+      });
+    });
   });
 
   describe('Saved Jobs Endpoints', () => {

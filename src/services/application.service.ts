@@ -640,4 +640,39 @@ export const applicationService = {
       }
     });
   },
+
+  /**
+   * Update custom document URLs for an application
+   */
+  async updateCustomDocuments(
+    userId: string,
+    applicationId: string,
+    resumeUrl?: string | null,
+    coverLetterUrl?: string | null
+  ) {
+    // Verify application belongs to user
+    const application = await this.getApplicationById(userId, applicationId);
+    
+    if (!application) {
+      throw new NotFoundError('Application');
+    }
+
+    // Update the application with custom document URLs
+    const updated = await db
+      .update(applications)
+      .set({
+        customResumeUrl: resumeUrl,
+        customCoverLetterUrl: coverLetterUrl,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(applications.id, applicationId),
+          eq(applications.userId, userId)
+        )
+      )
+      .returning();
+
+    return updated[0];
+  },
 };

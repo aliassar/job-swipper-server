@@ -252,6 +252,8 @@ export const applications = pgTable('applications', {
   generatedResumeId: uuid('generated_resume_id'),
   generatedCoverLetterId: uuid('generated_cover_letter_id'),
   generatedMessage: text('generated_message'),
+  customResumeUrl: text('custom_resume_url'),
+  customCoverLetterUrl: text('custom_cover_letter_url'),
   notes: text('notes'),
   autoUpdateStatus: boolean('auto_update_status').notNull().default(false),
   appliedAt: timestamp('applied_at'),
