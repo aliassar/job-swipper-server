@@ -12,7 +12,7 @@ const jobs = new Hono<AppContext>();
 
 // Validation schemas
 const reportJobSchema = z.object({
-  reason: z.enum(['spam', 'duplicate', 'expired', 'misleading', 'other']),
+  reason: z.enum(['fake', 'not_interested', 'dont_recommend_company']),
   details: z.string().optional(),
 });
 
@@ -26,6 +26,19 @@ jobs.get('/', async (c) => {
   const jobList = await jobService.getPendingJobs(auth.userId, search, limit);
 
   return c.json(formatResponse(true, jobList, null, requestId));
+});
+
+// GET /api/jobs/skipped - Get skipped jobs
+jobs.get('/skipped', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const page = parseIntSafe(c.req.query('page'), 1);
+  const limit = parseIntSafe(c.req.query('limit'), 20);
+  const search = c.req.query('search');
+
+  const result = await jobService.getSkippedJobs(auth.userId, page, limit, search);
+
+  return c.json(formatResponse(true, result, null, requestId));
 });
 
 // POST /api/jobs/:id/accept - Accept a job
@@ -144,19 +157,6 @@ jobs.post('/:id/unreport', async (c) => {
   return c.json(
     formatResponse(true, { message: 'Report removed successfully' }, null, requestId)
   );
-});
-
-// GET /api/jobs/skipped - Get skipped jobs
-jobs.get('/skipped', async (c) => {
-  const auth = c.get('auth');
-  const requestId = c.get('requestId');
-  const page = parseIntSafe(c.req.query('page'), 1);
-  const limit = parseIntSafe(c.req.query('limit'), 20);
-  const search = c.req.query('search');
-
-  const result = await jobService.getSkippedJobs(auth.userId, page, limit, search);
-
-  return c.json(formatResponse(true, result, null, requestId));
 });
 
 export default jobs;

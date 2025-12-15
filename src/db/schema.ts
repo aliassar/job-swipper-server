@@ -4,16 +4,19 @@ import { pgTable, pgEnum, text, timestamp, boolean, integer, jsonb, uuid } from 
 export const userJobStatusEnum = pgEnum('user_job_status_enum', ['pending', 'accepted', 'rejected', 'skipped']);
 export const applicationStageEnum = pgEnum('application_stage_enum', [
   'Syncing',
+  'CV Check',
+  'Message Check',
   'Being Applied',
   'Applied',
-  'Phone Screen',
-  'Interview',
+  'Interview 1',
+  'Next Interviews',
   'Offer',
   'Rejected',
   'Accepted',
   'Withdrawn',
+  'Failed',
 ]);
-export const reportReasonEnum = pgEnum('report_reason_enum', ['spam', 'duplicate', 'expired', 'misleading', 'other']);
+export const reportReasonEnum = pgEnum('report_reason_enum', ['fake', 'not_interested', 'dont_recommend_company']);
 export const actionTypeEnum = pgEnum('action_type_enum', [
   'accepted',
   'rejected',
@@ -25,8 +28,117 @@ export const actionTypeEnum = pgEnum('action_type_enum', [
   'unreport',
   'stage_updated',
 ]);
+export const oauthProviderEnum = pgEnum('oauth_provider_enum', ['google', 'github', 'email']);
+export const notificationTypeEnum = pgEnum('notification_type_enum', [
+  'cv_ready',
+  'message_ready',
+  'status_changed',
+  'follow_up_reminder',
+  'verification_needed',
+  'generation_failed',
+  'apply_failed',
+]);
+export const timerTypeEnum = pgEnum('timer_type_enum', [
+  'auto_apply_delay',
+  'cv_verification',
+  'message_verification',
+  'doc_deletion',
+  'follow_up_reminder',
+]);
+export const emailProviderEnum = pgEnum('email_provider_enum', ['gmail', 'outlook', 'yahoo', 'imap']);
 
 // Tables
+
+// Users table for email/password authentication
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  oauthProvider: oauthProviderEnum('oauth_provider').notNull().default('email'),
+  oauthId: text('oauth_id'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// User profiles table for auto-apply information
+export const userProfiles = pgTable('user_profiles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  phone: text('phone'),
+  linkedinUrl: text('linkedin_url'),
+  address: text('address'),
+  city: text('city'),
+  state: text('state'),
+  zipCode: text('zip_code'),
+  country: text('country'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Notifications table
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: notificationTypeEnum('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  isRead: boolean('is_read').notNull().default(false),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Blocked companies table
+export const blockedCompanies = pgTable('blocked_companies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyName: text('company_name').notNull(),
+  reason: text('reason'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Email connections table for OAuth tokens
+export const emailConnections = pgTable('email_connections', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: emailProviderEnum('provider').notNull(),
+  email: text('email').notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  tokenExpiresAt: timestamp('token_expires_at'),
+  imapHost: text('imap_host'),
+  imapPort: integer('imap_port'),
+  imapUsername: text('imap_username'),
+  imapPassword: text('imap_password'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Scheduled timers table for delayed operations
+export const scheduledTimers = pgTable('scheduled_timers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: timerTypeEnum('type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  executeAt: timestamp('execute_at').notNull(),
+  executed: boolean('executed').notNull().default(false),
+  executedAt: timestamp('executed_at'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Email verification tokens table
+export const emailVerificationTokens = pgTable('email_verification_tokens', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  used: boolean('used').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
 
 // User settings table
 export const userSettings = pgTable('user_settings', {
@@ -40,6 +152,17 @@ export const userSettings = pgTable('user_settings', {
   autoGenerateCoverLetter: boolean('auto_generate_cover_letter').notNull().default(false),
   autoGenerateEmail: boolean('auto_generate_email').notNull().default(false),
   aiFilteringEnabled: boolean('ai_filtering_enabled').notNull().default(false),
+  autoApplyEnabled: boolean('auto_apply_enabled').notNull().default(false),
+  writeResumeAndCoverLetter: boolean('write_resume_and_cover_letter').notNull().default(false),
+  applyForMeEnabled: boolean('apply_for_me_enabled').notNull().default(false),
+  verifyResumeAndCoverLetter: boolean('verify_resume_and_cover_letter').notNull().default(true),
+  updateStatusForMe: boolean('update_status_for_me').notNull().default(false),
+  filterOutFakeJobs: boolean('filter_out_fake_jobs').notNull().default(false),
+  followUpReminderEnabled: boolean('follow_up_reminder_enabled').notNull().default(false),
+  followUpIntervalDays: integer('follow_up_interval_days').notNull().default(7),
+  autoFollowUpEnabled: boolean('auto_follow_up_enabled').notNull().default(false),
+  baseResumeId: uuid('base_resume_id').references(() => resumeFiles.id),
+  baseCoverLetterId: uuid('base_cover_letter_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -120,9 +243,36 @@ export const applications = pgTable('applications', {
   resumeFileId: uuid('resume_file_id').references(() => resumeFiles.id),
   generatedResumeId: uuid('generated_resume_id'),
   generatedCoverLetterId: uuid('generated_cover_letter_id'),
+  generatedMessage: text('generated_message'),
   notes: text('notes'),
+  autoUpdateStatus: boolean('auto_update_status').notNull().default(false),
   appliedAt: timestamp('applied_at'),
   lastUpdated: timestamp('last_updated').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Workflow runs table for tracking application workflow state
+export const workflowRuns = pgTable('workflow_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  applicationId: uuid('application_id').notNull().references(() => applications.id, { onDelete: 'cascade' }),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  status: text('status').notNull(),
+  currentStep: text('current_step'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Follow-up tracking table
+export const followUpTracking = pgTable('follow_up_tracking', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  applicationId: uuid('application_id').notNull().references(() => applications.id, { onDelete: 'cascade' }),
+  followUpCount: integer('follow_up_count').notNull().default(0),
+  lastFollowUpAt: timestamp('last_follow_up_at'),
+  nextFollowUpAt: timestamp('next_follow_up_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -181,7 +331,7 @@ export const auditLogs = pgTable('audit_logs', {
 // Password reset tokens table
 export const passwordResetTokens = pgTable('password_reset_tokens', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   token: text('token').notNull().unique(),
   expiresAt: timestamp('expires_at').notNull(),
   used: boolean('used').notNull().default(false),
