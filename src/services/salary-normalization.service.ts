@@ -1,7 +1,7 @@
 import { db } from '../lib/db';
 import { jobs } from '../db/schema';
 import { parseSalaryRange } from '../lib/utils';
-import { sql, isNotNull, or, isNull } from 'drizzle-orm';
+import { isNotNull, and, or, isNull, eq } from 'drizzle-orm';
 import { logger } from '../middleware/logger';
 
 /**
@@ -32,10 +32,12 @@ export const salaryNormalizationService = {
         })
         .from(jobs)
         .where(
-          or(
+          and(
             isNotNull(jobs.salary),
-            isNull(jobs.salaryMin),
-            isNull(jobs.salaryMax)
+            or(
+              isNull(jobs.salaryMin),
+              isNull(jobs.salaryMax)
+            )
           )
         );
 
@@ -61,7 +63,7 @@ export const salaryNormalizationService = {
                 salaryMax: max,
                 updatedAt: new Date(),
               })
-              .where(sql`${jobs.id} = ${job.id}`);
+              .where(eq(jobs.id, job.id));
 
             updated++;
           }
@@ -97,7 +99,7 @@ export const salaryNormalizationService = {
           salary: jobs.salary,
         })
         .from(jobs)
-        .where(sql`${jobs.id} = ${jobId}`)
+        .where(eq(jobs.id, jobId))
         .limit(1);
 
       if (job.length === 0) {
@@ -113,7 +115,7 @@ export const salaryNormalizationService = {
           salaryMax: max,
           updatedAt: new Date(),
         })
-        .where(sql`${jobs.id} = ${jobId}`);
+        .where(eq(jobs.id, jobId));
 
       return true;
     } catch (error) {
