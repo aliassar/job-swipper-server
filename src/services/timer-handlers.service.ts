@@ -41,7 +41,8 @@ export const timerHandlers = {
         return;
       }
 
-      const app = application[0];
+      // Application exists but we don't need to use it here
+      // const _app = application[0];
 
       // Check if there's a workflow run for this application
       const workflowRun = await workflowService.getWorkflowByApplication(applicationId);
@@ -284,7 +285,7 @@ export const timerHandlers = {
       let followUpCount = 0;
       if (tracking.length === 0) {
         // Create new tracking
-        const [newTracking] = await db
+        await db
           .insert(followUpTracking)
           .values({
             userId,

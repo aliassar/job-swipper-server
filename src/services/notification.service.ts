@@ -12,6 +12,8 @@ export type NotificationType =
   | 'generation_failed'
   | 'apply_failed';
 
+// Internal interface for notification data structure (reserved for future use)
+// @ts-ignore - Reserved for future use
 interface CreateNotificationData {
   userId: string;
   type: NotificationType;

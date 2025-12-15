@@ -365,7 +365,7 @@ export const jobService = {
     };
   },
 
-  async acceptJob(userId: string, jobId: string, requestId?: string) {
+  async acceptJob(userId: string, jobId: string, _requestId?: string) {
     // Use a transaction for atomicity
     return await db.transaction(async (tx) => {
       // Update job status to accepted

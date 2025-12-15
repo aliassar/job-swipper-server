@@ -19,6 +19,7 @@ import webhooks from './webhooks';
 import emailConnections from './email-connections';
 import userProfile from './user-profile';
 import applicationHistory from './application-history';
+import admin from './admin';
 
 const api = new Hono<AppContext>();
 
@@ -35,6 +36,9 @@ api.get('/health', (c) => {
 
 // Sync endpoint (no auth required for cron)
 api.route('/sync', sync);
+
+// Admin endpoints (no auth required - should be protected by network rules in production)
+api.route('/admin', admin);
 
 // Auth endpoints (no auth required)
 api.route('/auth', auth);
