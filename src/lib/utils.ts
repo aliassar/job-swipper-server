@@ -93,15 +93,18 @@ export function parseSalaryRange(salaryString: string | null | undefined): {
   // Try to find numbers in the string
   const numbers: number[] = [];
   
-  // Match patterns like "50k", "50000", "50.5k"
-  const numberPattern = /(\d+(?:\.\d+)?)\s*k?/gi;
+  // Match patterns like "50k", "50000", "50.5k" with explicit 'k' capture
+  const numberPattern = /(\d+(?:\.\d+)?)\s*(k)?/gi;
   let match;
   
   while ((match = numberPattern.exec(cleaned)) !== null) {
+    // Skip if this is an empty match
+    if (!match[1]) continue;
+    
     let value = parseFloat(match[1]);
     
-    // If followed by 'k', multiply by 1000
-    if (match[0].toLowerCase().includes('k')) {
+    // If group 2 captured 'k', multiply by 1000
+    if (match[2]) {
       value *= 1000;
     }
     

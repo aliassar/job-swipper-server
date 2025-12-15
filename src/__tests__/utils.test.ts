@@ -90,5 +90,11 @@ describe('Utils', () => {
       expect(result.min).toBe(50000);
       expect(result.max).toBe(80000);
     });
+
+    it('should correctly distinguish between numbers with and without k', () => {
+      const result = parseSalaryRange('50 - 80k');
+      expect(result.min).toBe(50);
+      expect(result.max).toBe(80000);
+    });
   });
 });
