@@ -141,6 +141,9 @@ export const emailConnectionService = {
       }
 
       // For OAuth, check if tokens exist and are not expired
+      // Note: null tokenExpiresAt is treated as valid (never expires)
+      // This is consistent with getConnectionWithValidToken which only refreshes
+      // when tokenExpiresAt exists AND is expiring soon
       const hasAccessToken = !!(connection.accessToken || connection.encryptedAccessToken);
       const hasRefreshToken = !!(connection.refreshToken || connection.encryptedRefreshToken);
       const isNotExpired = !connection.tokenExpiresAt || connection.tokenExpiresAt > new Date();
@@ -850,13 +853,19 @@ export const emailConnectionService = {
       case 'gmail':
         clientId = process.env.GMAIL_CLIENT_ID;
         clientSecret = process.env.GMAIL_CLIENT_SECRET;
+        
+        if (!clientId || !clientSecret) {
+          logger.error({ connectionId, provider: 'gmail' }, 'Gmail OAuth credentials not configured');
+          throw new Error('Gmail OAuth not configured');
+        }
+        
         tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             refresh_token: refreshToken,
-            client_id: clientId!,
-            client_secret: clientSecret!,
+            client_id: clientId,
+            client_secret: clientSecret,
             grant_type: 'refresh_token',
           }),
         });
@@ -865,13 +874,19 @@ export const emailConnectionService = {
       case 'outlook':
         clientId = process.env.OUTLOOK_CLIENT_ID;
         clientSecret = process.env.OUTLOOK_CLIENT_SECRET;
+        
+        if (!clientId || !clientSecret) {
+          logger.error({ connectionId, provider: 'outlook' }, 'Outlook OAuth credentials not configured');
+          throw new Error('Outlook OAuth not configured');
+        }
+        
         tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             refresh_token: refreshToken,
-            client_id: clientId!,
-            client_secret: clientSecret!,
+            client_id: clientId,
+            client_secret: clientSecret,
             grant_type: 'refresh_token',
           }),
         });
@@ -880,6 +895,12 @@ export const emailConnectionService = {
       case 'yahoo':
         clientId = process.env.YAHOO_CLIENT_ID;
         clientSecret = process.env.YAHOO_CLIENT_SECRET;
+        
+        if (!clientId || !clientSecret) {
+          logger.error({ connectionId, provider: 'yahoo' }, 'Yahoo OAuth credentials not configured');
+          throw new Error('Yahoo OAuth not configured');
+        }
+        
         tokenResponse = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
           method: 'POST',
           headers: {
@@ -923,6 +944,14 @@ export const emailConnectionService = {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token || refreshToken,
     });
+
+    // Log if we're falling back to old refresh token
+    if (!tokens.refresh_token && refreshToken) {
+      logger.warn(
+        { connectionId, provider: conn.provider },
+        'OAuth provider did not return new refresh token, using existing one (may be invalid if provider rotates tokens)'
+      );
+    }
 
     await db
       .update(emailConnections)
