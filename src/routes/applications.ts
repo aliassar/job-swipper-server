@@ -4,6 +4,7 @@ import { AppContext } from '../types';
 import { applicationService } from '../services/application.service';
 import { formatResponse, parseIntSafe } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
+import { storage } from '../lib/storage';
 
 const applications = new Hono<AppContext>();
 
@@ -25,6 +26,14 @@ const updateStageSchema = z.object({
   ]),
 });
 
+const updateNotesSchema = z.object({
+  notes: z.string(),
+});
+
+const updateMessageSchema = z.object({
+  message: z.string(),
+});
+
 // GET /api/applications - Get applications
 applications.get('/', async (c) => {
   const auth = c.get('auth');
@@ -36,6 +45,17 @@ applications.get('/', async (c) => {
   const result = await applicationService.getApplications(auth.userId, page, limit, search);
 
   return c.json(formatResponse(true, result, null, requestId));
+});
+
+// GET /api/applications/:id - Full details with job and docs
+applications.get('/:id', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.getApplicationDetails(auth.userId, applicationId);
+
+  return c.json(formatResponse(true, application, null, requestId));
 });
 
 // PUT /api/applications/:id/stage - Update application stage
@@ -56,6 +76,149 @@ applications.put('/:id/stage', async (c) => {
     applicationId,
     validated.data.stage
   );
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// PUT /api/applications/:id/notes - Update notes
+applications.put('/:id/notes', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const body = await c.req.json();
+  const validated = updateNotesSchema.safeParse(body);
+
+  if (!validated.success) {
+    throw new ValidationError('Invalid request body', validated.error.errors);
+  }
+
+  const application = await applicationService.updateApplicationNotes(
+    auth.userId,
+    applicationId,
+    validated.data.notes
+  );
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// POST /api/applications/:id/cv/confirm - Confirm CV
+applications.post('/:id/cv/confirm', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.confirmCvVerification(auth.userId, applicationId);
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// POST /api/applications/:id/cv/reupload - Reupload CV
+applications.post('/:id/cv/reupload', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  // Get file from form data
+  const formData = await c.req.formData();
+  const file = formData.get('file') as File | null;
+
+  if (!file) {
+    throw new ValidationError('No file provided');
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const newResumeFile = {
+    filename: file.name,
+    buffer,
+    mimetype: file.type,
+  };
+
+  const application = await applicationService.rejectCvAndReupload(
+    auth.userId,
+    applicationId,
+    newResumeFile
+  );
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// POST /api/applications/:id/message/confirm - Confirm message
+applications.post('/:id/message/confirm', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.confirmMessageVerification(auth.userId, applicationId);
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// PUT /api/applications/:id/message - Edit message
+applications.put('/:id/message', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const body = await c.req.json();
+  const validated = updateMessageSchema.safeParse(body);
+
+  if (!validated.success) {
+    throw new ValidationError('Invalid request body', validated.error.errors);
+  }
+
+  const application = await applicationService.updateAndConfirmMessage(
+    auth.userId,
+    applicationId,
+    validated.data.message
+  );
+
+  return c.json(formatResponse(true, application, null, requestId));
+});
+
+// GET /api/applications/:id/download/resume - Download generated resume
+applications.get('/:id/download/resume', async (c) => {
+  const auth = c.get('auth');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.getApplicationDetails(auth.userId, applicationId);
+
+  if (!application.generatedResume) {
+    throw new ValidationError('No generated resume found');
+  }
+
+  // Get presigned URL for download
+  const key = application.generatedResume.fileUrl.split('.com/')[1];
+  const downloadUrl = await storage.getPresignedUrl(key);
+
+  return c.redirect(downloadUrl);
+});
+
+// GET /api/applications/:id/download/cover-letter - Download cover letter
+applications.get('/:id/download/cover-letter', async (c) => {
+  const auth = c.get('auth');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.getApplicationDetails(auth.userId, applicationId);
+
+  if (!application.generatedCoverLetter) {
+    throw new ValidationError('No generated cover letter found');
+  }
+
+  // Get presigned URL for download
+  const key = application.generatedCoverLetter.fileUrl.split('.com/')[1];
+  const downloadUrl = await storage.getPresignedUrl(key);
+
+  return c.redirect(downloadUrl);
+});
+
+// POST /api/applications/:id/toggle-auto-status - Toggle auto status for application
+applications.post('/:id/toggle-auto-status', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+  const applicationId = c.req.param('id');
+
+  const application = await applicationService.toggleAutoStatus(auth.userId, applicationId);
 
   return c.json(formatResponse(true, application, null, requestId));
 });

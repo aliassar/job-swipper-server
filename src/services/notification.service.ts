@@ -39,21 +39,27 @@ export const notificationService = {
   /**
    * Create a new notification
    */
-  async createNotification(data: CreateNotificationData): Promise<NotificationData> {
+  async createNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    metadata?: Record<string, unknown>
+  ): Promise<NotificationData> {
     const [notification] = await db
       .insert(notifications)
       .values({
-        userId: data.userId,
-        type: data.type,
-        title: data.title,
-        message: data.message,
-        metadata: data.metadata || {},
+        userId,
+        type,
+        title,
+        message,
+        metadata: metadata || {},
         isRead: false,
       })
       .returning();
 
     // Emit event for SSE listeners
-    notificationEmitter.emit(`notification:${data.userId}`, notification);
+    notificationEmitter.emit(`notification:${userId}`, notification);
 
     return notification as NotificationData;
   },

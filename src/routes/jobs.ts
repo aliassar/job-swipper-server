@@ -22,10 +22,29 @@ jobs.get('/', async (c) => {
   const requestId = c.get('requestId');
   const search = c.req.query('search');
   const limit = parseIntSafe(c.req.query('limit'), 10);
+  const location = c.req.query('location');
+  const salaryMin = c.req.query('salaryMin') ? parseIntSafe(c.req.query('salaryMin')!, 0) : undefined;
+  const salaryMax = c.req.query('salaryMax') ? parseIntSafe(c.req.query('salaryMax')!, 0) : undefined;
 
-  const jobList = await jobService.getPendingJobs(auth.userId, search, limit);
+  const result = await jobService.getPendingJobs(auth.userId, search, limit, location, salaryMin, salaryMax);
 
-  return c.json(formatResponse(true, jobList, null, requestId));
+  return c.json(formatResponse(true, result, null, requestId));
+});
+
+// GET /api/jobs/filters - Get filter options
+jobs.get('/filters', async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.get('requestId');
+
+  const blockedCompanies = await jobService.getBlockedCompanies(auth.userId);
+
+  return c.json(formatResponse(true, {
+    blockedCompanies: blockedCompanies.map(b => ({
+      company: b.companyName,
+      reason: b.reason,
+      blockedAt: b.createdAt,
+    })),
+  }, null, requestId));
 });
 
 // GET /api/jobs/skipped - Get skipped jobs
@@ -102,9 +121,9 @@ jobs.post('/:id/rollback', async (c) => {
   const requestId = c.get('requestId');
   const jobId = c.req.param('id');
 
-  const job = await jobService.updateJobStatus(auth.userId, jobId, 'pending', 'rollback');
+  const result = await jobService.rollbackJob(auth.userId, jobId);
 
-  return c.json(formatResponse(true, job, null, requestId));
+  return c.json(formatResponse(true, result, null, requestId));
 });
 
 // POST /api/jobs/:id/report - Report a job
@@ -120,28 +139,14 @@ jobs.post('/:id/report', async (c) => {
     throw new ValidationError('Invalid request body', validated.error.errors);
   }
 
-  // Check if job exists
-  await jobService.getJobWithStatus(auth.userId, jobId);
-
-  // Check if already reported
-  const existing = await db
-    .select()
-    .from(reportedJobs)
-    .where(and(eq(reportedJobs.userId, auth.userId), eq(reportedJobs.jobId, jobId)))
-    .limit(1);
-
-  if (existing.length === 0) {
-    await db.insert(reportedJobs).values({
-      userId: auth.userId,
-      jobId,
-      reason: validated.data.reason,
-      details: validated.data.details,
-    });
-  }
-
-  return c.json(
-    formatResponse(true, { message: 'Job reported successfully' }, null, requestId)
+  const report = await jobService.reportJob(
+    auth.userId,
+    jobId,
+    validated.data.reason,
+    validated.data.details
   );
+
+  return c.json(formatResponse(true, report, null, requestId));
 });
 
 // POST /api/jobs/:id/unreport - Remove report
@@ -150,9 +155,7 @@ jobs.post('/:id/unreport', async (c) => {
   const requestId = c.get('requestId');
   const jobId = c.req.param('id');
 
-  await db
-    .delete(reportedJobs)
-    .where(and(eq(reportedJobs.userId, auth.userId), eq(reportedJobs.jobId, jobId)));
+  await jobService.unreportJob(auth.userId, jobId);
 
   return c.json(
     formatResponse(true, { message: 'Report removed successfully' }, null, requestId)

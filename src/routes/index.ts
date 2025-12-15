@@ -16,6 +16,9 @@ import users from './users';
 import sync from './sync';
 import notifications from './notifications';
 import webhooks from './webhooks';
+import emailConnections from './email-connections';
+import userProfile from './user-profile';
+import applicationHistory from './application-history';
 
 const api = new Hono<AppContext>();
 
@@ -42,6 +45,7 @@ api.route('/webhooks', webhooks);
 // All other routes require authentication
 api.use('/jobs/*', authMiddleware);
 api.use('/applications/*', authMiddleware);
+api.use('/application-history/*', authMiddleware);
 api.use('/saved/*', authMiddleware);
 api.use('/reported/*', authMiddleware);
 api.use('/history/*', authMiddleware);
@@ -50,12 +54,15 @@ api.use('/resumes/*', authMiddleware);
 api.use('/cover-letters/*', authMiddleware);
 api.use('/generated/*', authMiddleware);
 api.use('/email/*', authMiddleware);
+api.use('/email-connections/*', authMiddleware);
 api.use('/users/*', authMiddleware);
+api.use('/user-profile/*', authMiddleware);
 api.use('/notifications/*', authMiddleware);
 
 // Mount routes
 api.route('/jobs', jobs);
 api.route('/applications', applications);
+api.route('/application-history', applicationHistory);
 api.route('/saved', saved);
 api.route('/reported', reported);
 api.route('/history', history);
@@ -64,7 +71,9 @@ api.route('/resumes', resumes);
 api.route('/cover-letters', coverLetters);
 api.route('/', generation); // Generation routes are mounted at root for /jobs/:id/generate/*
 api.route('/email', emailSync);
+api.route('/email-connections', emailConnections);
 api.route('/users', users);
+api.route('/user-profile', userProfile);
 api.route('/notifications', notifications);
 
 export default api;
