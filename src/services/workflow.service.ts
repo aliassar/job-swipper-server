@@ -1,6 +1,6 @@
 import { db } from '../lib/db';
 import { workflowRuns, applications, userSettings } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
@@ -42,7 +42,7 @@ export const workflowService = {
       .select()
       .from(workflowRuns)
       .where(eq(workflowRuns.applicationId, applicationId))
-      .orderBy(workflowRuns.createdAt)
+      .orderBy(desc(workflowRuns.createdAt))
       .limit(1);
 
     return result.length > 0 ? result[0] : null;
@@ -73,13 +73,19 @@ export const workflowService = {
     status: WorkflowStatus,
     errorMessage?: string
   ): Promise<void> {
+    const workflowRun = await this.getWorkflowRun(workflowRunId);
+    
     const updateData: any = {
       status,
       updatedAt: new Date(),
     };
 
     if (errorMessage) {
-      updateData.metadata = db.raw(`metadata || '{"error": "${errorMessage}"}'::jsonb`);
+      // Merge error into existing metadata
+      updateData.metadata = {
+        ...workflowRun.metadata,
+        error: errorMessage,
+      };
     }
 
     await db

@@ -35,6 +35,11 @@ export const storage = {
     return await getSignedUrl(s3Client, command, { expiresIn });
   },
 
+  async getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    // Alias for getSignedUrl
+    return this.getSignedUrl(key, expiresIn);
+  },
+
   async deleteFile(key: string): Promise<void> {
     await s3Client.send(
       new DeleteObjectCommand({
@@ -44,7 +49,7 @@ export const storage = {
     );
   },
 
-  generateKey(userId: string, type: 'resume' | 'generated-resume' | 'cover-letter', filename: string): string {
+  generateKey(userId: string, type: 'resume' | 'generated-resume' | 'cover-letter' | 'base-resume' | 'base-cover-letter', filename: string): string {
     const timestamp = Date.now();
     return `${type}/${userId}/${timestamp}-${filename}`;
   },
