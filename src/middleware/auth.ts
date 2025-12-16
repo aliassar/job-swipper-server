@@ -31,6 +31,18 @@ export async function authMiddleware(c: Context<AppContext>, next: Next) {
     throw new AuthenticationError('Invalid authorization header format');
   }
 
+  // Check for placeholder/invalid tokens that are not valid JWTs
+  if (token === 'authenticated' || token === 'placeholder' || token === 'null' || token === 'undefined') {
+    logger.warn({
+      requestId,
+      event: 'auth_failed',
+      reason: 'placeholder_token',
+      token: token.substring(0, 20), // Log partial token for debugging
+    }, 'Authentication failed - placeholder or invalid token detected');
+    
+    throw new AuthenticationError('Invalid authentication token. Please login to get a valid JWT token.');
+  }
+
   try {
     // Verify and decode JWT token
     const user = authService.verifyToken(token);
@@ -49,6 +61,15 @@ export async function authMiddleware(c: Context<AppContext>, next: Next) {
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 'Authentication failed - invalid or expired token');
     
-    throw new AuthenticationError('Invalid or expired token');
+    // Provide more specific error message based on the error type
+    if (error instanceof Error) {
+      if (error.message.includes('jwt expired')) {
+        throw new AuthenticationError('Authentication token has expired. Please login again.');
+      } else if (error.message.includes('jwt malformed') || error.message.includes('invalid token')) {
+        throw new AuthenticationError('Invalid authentication token format. Please provide a valid JWT token.');
+      }
+    }
+    
+    throw new AuthenticationError('Invalid or expired authentication token. Please login again.');
   }
 }

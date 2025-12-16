@@ -2,6 +2,8 @@
 
 A production-ready backend server for the Job Swiper application built with Hono (TypeScript), Drizzle ORM, and PostgreSQL.
 
+> **⚠️ Repository Naming Note:** This repository is named `job-swipper-server` (with double 'p'), while the client repository is `job-swiper` (single 'p'). This naming inconsistency is historical and does not affect functionality.
+
 ## Tech Stack
 
 - **Framework:** Hono (TypeScript)
@@ -48,6 +50,18 @@ npm install
 cp .env.example .env
 
 # Edit .env with your configuration
+# See .env.example for detailed documentation of each variable
+# Required variables: DATABASE_URL, JWT_SECRET, S3_* credentials
+```
+
+**Important Configuration Notes:**
+
+- **Authentication:** OAuth (Google/GitHub) is handled by THIS server, not the frontend. The frontend should redirect to `/api/auth/google` or `/api/auth/github` endpoints.
+- **CORS:** Add your frontend URL to `ALLOWED_ORIGINS` environment variable (e.g., `https://app.yourdomain.com`). Multiple origins can be comma-separated.
+- **Required Variables:** `DATABASE_URL`, `JWT_SECRET`, and S3 storage credentials are required for the server to start.
+- **Optional Variables:** OAuth providers, microservices, and email features are optional and can be configured as needed.
+
+See `.env.example` for complete documentation of all environment variables.
 ```
 
 ### Database Setup
@@ -392,19 +406,77 @@ All endpoints return standardized JSON responses:
 
 ## Environment Variables
 
-See `.env.example` for a complete list of required environment variables with descriptions.
+See `.env.example` for a complete list of environment variables with detailed documentation.
 
-Key variables include:
-- `DATABASE_URL` - PostgreSQL connection string
-- `JWT_SECRET` - Secret for JWT token signing
-- `S3_*` - S3-compatible storage configuration
-- Microservice URLs and API keys
-- OAuth credentials (Google, GitHub, Gmail, Outlook, Yahoo)
-- `ENCRYPTION_KEY` - For encrypting sensitive data (email passwords)
+### Required Variables (Server Won't Start Without These)
+
+- **`DATABASE_URL`** - PostgreSQL connection string
+- **`JWT_SECRET`** - Secret for JWT token signing (generate with: `openssl rand -base64 32`)
+- **`S3_BUCKET`** - S3 bucket name for file storage
+- **`S3_REGION`** - S3 region (e.g., `us-east-1` or `auto` for Cloudflare R2)
+- **`S3_ACCESS_KEY`** - S3 access key ID
+- **`S3_SECRET_KEY`** - S3 secret access key
+- **`S3_ENDPOINT`** - S3 endpoint URL
+
+### Important Configuration Variables
+
+- **`ALLOWED_ORIGINS`** - Comma-separated list of frontend URLs allowed to make CORS requests
+  - Example: `https://app.yourdomain.com,https://staging.yourdomain.com`
+  - **Critical:** Your frontend URL must be listed here or requests will be blocked
+- **`FRONTEND_URL`** - Base URL of your frontend (used for OAuth redirects)
+- **`NEXTAUTH_URL`** - Base URL of this API server (used for OAuth callbacks)
+
+### Optional Variables
+
+- **OAuth Providers:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- **Email Features:** `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL`
+- **Email Connections:** `ENCRYPTION_KEY`, `GMAIL_CLIENT_ID`, `OUTLOOK_CLIENT_ID`, `YAHOO_CLIENT_ID`
+- **Microservices:** Various service URLs and API keys (see `.env.example`)
+- **Security:** `ADMIN_API_KEY`, `WEBHOOK_SECRET`, `CRON_SECRET`
+
+For complete documentation and examples, see `.env.example`.
+
+## CORS Configuration
+
+The server uses CORS middleware to control which frontend origins can access the API.
+
+### Development
+
+```bash
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+### Production
+
+```bash
+# Single frontend
+ALLOWED_ORIGINS=https://app.yourdomain.com
+
+# Multiple environments
+ALLOWED_ORIGINS=https://app.yourdomain.com,https://staging.yourdomain.com
+```
+
+**Important CORS Notes:**
+
+- 🚨 **Frontend URL must be in `ALLOWED_ORIGINS`** or requests will be blocked
+- ✅ Use exact URLs with protocol (e.g., `https://app.yourdomain.com`)
+- ✅ No trailing slashes
+- ✅ Separate multiple origins with commas (no spaces)
+- ❌ Do NOT use wildcards (`*`) in production
+
+### Common CORS Issues
+
+If your frontend gets CORS errors:
+1. Check that `ALLOWED_ORIGINS` includes your frontend URL
+2. Ensure the URL matches exactly (including `https://`)
+3. Restart the server after changing environment variables
+4. Clear browser cache (CORS headers can be cached)
 
 ## Deployment
 
-### Vercel Deployment
+For detailed production deployment instructions, see **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**.
+
+### Quick Start - Vercel Deployment
 
 ```bash
 # Install Vercel CLI
@@ -417,13 +489,37 @@ vercel deploy
 vercel --prod
 ```
 
-### Environment Setup
+### Deployment Checklist
 
-1. Configure all environment variables in Vercel dashboard
-2. Set up PostgreSQL database (Neon recommended)
-3. Configure S3-compatible storage (Cloudflare R2 recommended)
-4. Set up OAuth applications (Google, GitHub)
-5. Configure microservice endpoints
+1. ✅ Set up PostgreSQL database (Neon recommended)
+2. ✅ Configure S3-compatible storage (Cloudflare R2 recommended)
+3. ✅ Generate secure secrets (`JWT_SECRET`, `ADMIN_API_KEY`, etc.)
+4. ✅ Configure all required environment variables in your deployment platform
+5. ✅ Set `ALLOWED_ORIGINS` to include your frontend URL(s)
+6. ✅ Run database migrations: `npm run db:push`
+7. ✅ Set up OAuth applications if using Google/GitHub login
+8. ✅ Configure SMTP if using email/password registration
+9. ✅ Test health check endpoint: `GET https://api.yourdomain.com/`
+10. ✅ Verify CORS by testing API calls from your frontend
+
+### OAuth Configuration Notes
+
+**Important:** OAuth authentication (Google/GitHub login) is handled by THIS server, not the frontend.
+
+**OAuth Flow:**
+1. Frontend redirects user to: `GET /api/auth/google` or `GET /api/auth/github`
+2. Server handles OAuth with provider
+3. Server redirects back to frontend with JWT token
+4. Frontend stores JWT and uses it for API requests
+
+**Required Settings:**
+- Set `NEXTAUTH_URL` to your API server URL (e.g., `https://api.yourdomain.com`)
+- Set `FRONTEND_URL` to your frontend URL (e.g., `https://app.yourdomain.com`)
+- Configure OAuth callback URLs in provider settings:
+  - Google: `${NEXTAUTH_URL}/api/auth/google/callback`
+  - GitHub: `${NEXTAUTH_URL}/api/auth/github/callback`
+
+See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for complete deployment guide.
 
 ## Security Features
 
@@ -439,10 +535,12 @@ vercel --prod
 
 ## Additional Documentation
 
-- See `docs/API.md` for detailed API documentation with examples
-- See `docs/WORKFLOW.md` for application workflow processes
-- See `MICROSERVICE_IMPLEMENTATION.md` for microservice integration details
-- See `SECURE_CREDENTIALS.md` for credential handling documentation
+- **[docs/API.md](./docs/API.md)** - Complete API reference with request/response examples for all 96 endpoints
+- **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Production deployment guide with environment setup, CORS configuration, and troubleshooting
+- **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** - Application workflow processes and stage transitions
+- **[MICROSERVICE_IMPLEMENTATION.md](./MICROSERVICE_IMPLEMENTATION.md)** - Microservice integration details
+- **[SECURE_CREDENTIALS.md](./SECURE_CREDENTIALS.md)** - Credential handling and encryption documentation
+- **[.env.example](./.env.example)** - Comprehensive environment variable documentation with required/optional markers
 
 ## License
 

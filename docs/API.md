@@ -28,10 +28,101 @@ Complete API reference with request/response examples for all endpoints.
 
 ## Authentication
 
+Most endpoints require authentication via JWT (JSON Web Token). There are several ways to authenticate:
+
+### Authentication Methods
+
+1. **Email/Password** - Register with email and password, login to get JWT token
+2. **Google OAuth** - Login via Google account
+3. **GitHub OAuth** - Login via GitHub account
+
+### Using JWT Tokens
+
 All authenticated endpoints require a JWT token in the `Authorization` header:
-```
+
+```http
 Authorization: Bearer <jwt_token>
 ```
+
+**Example:**
+```bash
+curl https://api.yourdomain.com/api/jobs \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### Getting a JWT Token
+
+You can obtain a JWT token through:
+- **POST /api/auth/register** - Register new user
+- **POST /api/auth/login** - Login with email/password
+- **GET /api/auth/google** → **GET /api/auth/google/callback** - Google OAuth
+- **GET /api/auth/github** → **GET /api/auth/github/callback** - GitHub OAuth
+
+### Authentication Errors
+
+The API returns specific error messages for authentication failures:
+
+**Missing Token:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTHENTICATION_ERROR",
+    "message": "Missing authorization header"
+  },
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Invalid Token Format:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTHENTICATION_ERROR",
+    "message": "Invalid authentication token. Please login to get a valid JWT token."
+  }
+}
+```
+
+**Expired Token:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTHENTICATION_ERROR",
+    "message": "Authentication token has expired. Please login again."
+  }
+}
+```
+
+**Malformed Token:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTHENTICATION_ERROR",
+    "message": "Invalid authentication token format. Please provide a valid JWT token."
+  }
+}
+```
+
+### Common Authentication Issues
+
+**Problem:** "Invalid authentication token" error with placeholder tokens
+
+If your frontend sends `Authorization: Bearer authenticated` or similar placeholder values, the server will reject it. You must send a valid JWT token obtained from login/register endpoints.
+
+**Problem:** Token expired
+
+JWT tokens expire based on the `JWT_EXPIRES_IN` environment variable (default: 7 days). Users must login again to get a new token.
+
+**Problem:** CORS errors when authenticating
+
+Ensure your frontend URL is in the server's `ALLOWED_ORIGINS` environment variable.
 
 ### Register
 
