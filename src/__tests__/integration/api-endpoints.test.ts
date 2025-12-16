@@ -122,6 +122,50 @@ describe('API Endpoint Reliability Tests', () => {
         expect(result.job).toBeDefined();
         expect(jobService.acceptJob).toHaveBeenCalledWith(mockUserId, mockJobId);
       });
+
+      it('should accept a job with automaticApply metadata set to true', async () => {
+        vi.spyOn(jobService, 'acceptJob').mockResolvedValue({
+          job: { id: mockJobId, company: 'Test Corp', position: 'Engineer' },
+          application: { id: 'app-123', stage: 'applied' },
+          workflow: { id: 'workflow-123', status: 'pending' },
+        } as any);
+
+        const metadata = { automaticApply: true };
+        const result = await jobService.acceptJob(mockUserId, mockJobId, undefined, metadata);
+
+        expect(result.job).toBeDefined();
+        expect(result.workflow).toBeDefined();
+        expect(jobService.acceptJob).toHaveBeenCalledWith(mockUserId, mockJobId, undefined, metadata);
+      });
+
+      it('should accept a job with automaticApply metadata set to false', async () => {
+        vi.spyOn(jobService, 'acceptJob').mockResolvedValue({
+          job: { id: mockJobId, company: 'Test Corp', position: 'Engineer' },
+          application: { id: 'app-123', stage: 'applied' },
+          workflow: null,
+        } as any);
+
+        const metadata = { automaticApply: false };
+        const result = await jobService.acceptJob(mockUserId, mockJobId, undefined, metadata);
+
+        expect(result.job).toBeDefined();
+        expect(result.workflow).toBeNull();
+        expect(jobService.acceptJob).toHaveBeenCalledWith(mockUserId, mockJobId, undefined, metadata);
+      });
+
+      it('should accept a job with empty metadata (falls back to user settings)', async () => {
+        vi.spyOn(jobService, 'acceptJob').mockResolvedValue({
+          job: { id: mockJobId, company: 'Test Corp', position: 'Engineer' },
+          application: { id: 'app-123', stage: 'applied' },
+          workflow: null,
+        } as any);
+
+        const metadata = {};
+        const result = await jobService.acceptJob(mockUserId, mockJobId, undefined, metadata);
+
+        expect(result.job).toBeDefined();
+        expect(jobService.acceptJob).toHaveBeenCalledWith(mockUserId, mockJobId, undefined, metadata);
+      });
     });
 
     describe('POST /api/jobs/:id/reject - Reject Job', () => {

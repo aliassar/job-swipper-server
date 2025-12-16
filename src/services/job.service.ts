@@ -372,7 +372,7 @@ export const jobService = {
     };
   },
 
-  async acceptJob(userId: string, jobId: string, _requestId?: string) {
+  async acceptJob(userId: string, jobId: string, _requestId?: string, metadata?: { automaticApply?: boolean }) {
     // Use a transaction for atomicity
     return await db.transaction(async (tx) => {
       // Update job status to accepted
@@ -421,9 +421,16 @@ export const jobService = {
         }
       }
 
+      // Determine if auto-apply should be triggered
+      // If metadata.automaticApply is explicitly set, use that value
+      // Otherwise, fall back to user's autoApplyEnabled setting
+      const shouldAutoApply = metadata?.automaticApply !== undefined
+        ? metadata.automaticApply
+        : userPrefs.autoApplyEnabled;
+
       // Create workflow run with idempotency key
       let workflowRun = null;
-      if (userPrefs.autoApplyEnabled) {
+      if (shouldAutoApply) {
         const idempotencyKey = `workflow-${userId}-${application.id}-${Date.now()}`;
         
         const [workflow] = await tx

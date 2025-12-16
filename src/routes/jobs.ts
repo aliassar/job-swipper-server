@@ -13,6 +13,10 @@ const reportJobSchema = z.object({
   details: z.string().optional(),
 });
 
+const acceptJobSchema = z.object({
+  automaticApply: z.boolean().optional(),
+});
+
 // GET /api/jobs - Get pending jobs
 jobs.get('/', async (c) => {
   const auth = c.get('auth');
@@ -63,7 +67,28 @@ jobs.post('/:id/accept', async (c) => {
   const requestId = c.get('requestId');
   const jobId = c.req.param('id');
 
-  const job = await jobService.acceptJob(auth.userId, jobId, requestId);
+  let metadata: { automaticApply?: boolean } | undefined;
+  
+  // Parse optional request body
+  try {
+    const body = await c.req.json();
+    const validated = acceptJobSchema.safeParse(body);
+    
+    if (!validated.success) {
+      throw new ValidationError('Invalid request body', validated.error.errors);
+    }
+    
+    metadata = validated.data;
+  } catch (error) {
+    // If body is empty or invalid JSON, metadata remains undefined
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    // For empty body or JSON parse errors, use undefined metadata
+    metadata = undefined;
+  }
+
+  const job = await jobService.acceptJob(auth.userId, jobId, requestId, metadata);
 
   return c.json(formatResponse(true, job, null, requestId));
 });
