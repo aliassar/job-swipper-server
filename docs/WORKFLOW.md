@@ -115,10 +115,14 @@ Applications progress through the following stages:
 
 ```
 Syncing → CV Check → Message Check → Being Applied → Applied → 
-  → Interview 1 → Next Interviews → Offer → Accepted
+  → Interview 1 → Next Interviews → Offer → Accepted (terminal)
                                   ↓
-                              Rejected / Withdrawn / Failed
+                              Rejected (terminal)
+                              Withdrawn (terminal, user action)
+                              Failed (terminal, submission error)
 ```
+
+**Note:** Terminal states (Rejected, Accepted, Withdrawn, Failed) are final and cannot be changed once reached.
 
 ### Stage Descriptions
 
@@ -300,7 +304,7 @@ Syncing → CV Check → Message Check → Being Applied → Applied →
 - Gmail (OAuth 2.0)
 - Outlook (OAuth 2.0)
 - Yahoo (OAuth 2.0)
-- Custom IMAP
+- IMAP (custom email servers)
 
 **OAuth Flow (Gmail/Outlook/Yahoo):**
 1. User initiates connection: `POST /api/email-connections/gmail`

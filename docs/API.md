@@ -102,12 +102,58 @@ Authenticate with email and password.
 ### OAuth Login
 
 **Google OAuth:**
-- `GET /api/auth/google` - Redirects to Google OAuth
-- `GET /api/auth/google/callback` - Callback endpoint
+
+1. **Initiate Google OAuth**
+   - **Endpoint:** `GET /api/auth/google`
+   - Redirects to Google's consent screen
+   
+2. **Google OAuth Callback**
+   - **Endpoint:** `GET /api/auth/google/callback?code=...`
+   - **Response:**
+   ```json
+   {
+     "success": true,
+     "data": {
+       "user": {
+         "id": "user-uuid",
+         "email": "user@gmail.com",
+         "oauthProvider": "google"
+       },
+       "token": "jwt-token-here"
+     },
+     "meta": {
+       "requestId": "req_abc123",
+       "timestamp": "2024-01-01T00:00:00.000Z"
+     }
+   }
+   ```
 
 **GitHub OAuth:**
-- `GET /api/auth/github` - Redirects to GitHub OAuth
-- `GET /api/auth/github/callback` - Callback endpoint
+
+1. **Initiate GitHub OAuth**
+   - **Endpoint:** `GET /api/auth/github`
+   - Redirects to GitHub's consent screen
+   
+2. **GitHub OAuth Callback**
+   - **Endpoint:** `GET /api/auth/github/callback?code=...`
+   - **Response:**
+   ```json
+   {
+     "success": true,
+     "data": {
+       "user": {
+         "id": "user-uuid",
+         "email": "user@example.com",
+         "oauthProvider": "github"
+       },
+       "token": "jwt-token-here"
+     },
+     "meta": {
+       "requestId": "req_abc123",
+       "timestamp": "2024-01-01T00:00:00.000Z"
+     }
+   }
+   ```
 
 ---
 

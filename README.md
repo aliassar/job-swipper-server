@@ -16,7 +16,7 @@ A production-ready backend server for the Job Swiper application built with Hono
 
 ## Features
 
-- ✅ **70+ RESTful API endpoints** for comprehensive job management
+- ✅ **96 RESTful API endpoints** for comprehensive job management
 - ✅ **Job Swiper** functionality (accept, reject, skip, save, rollback)
 - ✅ **Application Tracking** with 12 customizable stages
 - ✅ **AI-powered Document Generation** (resumes & cover letters via microservices)
