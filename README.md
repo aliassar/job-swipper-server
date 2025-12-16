@@ -7,21 +7,27 @@ A production-ready backend server for the Job Swiper application built with Hono
 - **Framework:** Hono (TypeScript)
 - **ORM:** Drizzle ORM
 - **Database:** PostgreSQL (Neon-compatible)
-- **Auth:** NextAuth.js with GitHub and Google OAuth
-- **File Storage:** S3-compatible (Cloudflare R2)
+- **Authentication:** JWT with email/password, Google OAuth, GitHub OAuth
+- **File Storage:** S3-compatible (Cloudflare R2, AWS S3)
+- **PDF Generation:** PDFKit for export functionality
+- **Validation:** Zod for request/response validation
+- **Logging:** Pino for structured JSON logging
 - **Deployment:** Vercel serverless
 
 ## Features
 
-- RESTful API with comprehensive endpoints for job management
-- Job swiper functionality (accept, reject, skip, save)
-- Application tracking with customizable stages
-- Resume and cover letter generation via microservices
-- Email sync integration
-- Audit logging and security
-- Rate limiting (100 requests/minute per user)
-- Structured JSON logging with Pino
-- Automated job scraping via cron (every 2 hours)
+- ✅ **70+ RESTful API endpoints** for comprehensive job management
+- ✅ **Job Swiper** functionality (accept, reject, skip, save, rollback)
+- ✅ **Application Tracking** with 12 customizable stages
+- ✅ **AI-powered Document Generation** (resumes & cover letters via microservices)
+- ✅ **Email Integration** with OAuth (Gmail, Outlook, Yahoo) and IMAP support
+- ✅ **Real-time Notifications** via Server-Sent Events (SSE)
+- ✅ **Advanced Filtering** (search, location, salary range)
+- ✅ **Export Functionality** (CSV, PDF)
+- ✅ **Audit Logging** for all user actions
+- ✅ **Rate Limiting** (100 requests/minute per user)
+- ✅ **GDPR Compliance** (data export & account deletion)
+- ✅ **Automated Job Scraping** via cron (every 2 hours)
 
 ## Getting Started
 
@@ -30,6 +36,7 @@ A production-ready backend server for the Job Swiper application built with Hono
 - Node.js 18+
 - PostgreSQL database (or Neon)
 - S3-compatible storage (Cloudflare R2, AWS S3, etc.)
+- Redis (optional, for rate limiting)
 
 ### Installation
 
@@ -52,7 +59,7 @@ npm run db:generate
 # Push schema to database
 npm run db:push
 
-# Seed initial data
+# Seed initial data (optional)
 npm run db:seed
 
 # Open Drizzle Studio (database viewer)
@@ -86,110 +93,348 @@ npm test
 npm test:ui
 ```
 
-## API Endpoints
+## Project Structure
 
-### Jobs
-- `GET /api/jobs` - Get pending jobs
-- `POST /api/jobs/:id/accept` - Accept a job
-- `POST /api/jobs/:id/reject` - Reject a job
-- `POST /api/jobs/:id/skip` - Skip a job
+```
+job-swipper-server/
+├── src/
+│   ├── db/
+│   │   ├── migrations/       # Database migrations
+│   │   ├── schema.ts         # Drizzle schema definitions
+│   │   └── seed.ts           # Database seeding
+│   ├── lib/
+│   │   ├── audit.ts          # Audit logging utilities
+│   │   ├── db.ts             # Database connection
+│   │   ├── email-client.ts   # Email client utilities
+│   │   ├── encryption.ts     # Encryption utilities
+│   │   ├── errors.ts         # Custom error classes
+│   │   ├── microservice-client.ts  # Microservice communication
+│   │   ├── storage.ts        # S3 storage utilities
+│   │   └── utils.ts          # Helper functions
+│   ├── middleware/
+│   │   ├── auth.ts           # JWT authentication
+│   │   ├── error-handler.ts  # Global error handler
+│   │   ├── logger.ts         # Request logging
+│   │   ├── rate-limit.ts     # Rate limiting
+│   │   └── request-id.ts     # Request ID generation
+│   ├── routes/
+│   │   ├── admin.ts          # Admin endpoints
+│   │   ├── applications.ts   # Application management
+│   │   ├── auth.ts           # Authentication
+│   │   ├── cover-letters.ts  # Cover letter management
+│   │   ├── email-connections.ts  # Email OAuth/IMAP
+│   │   ├── generation.ts     # AI document generation
+│   │   ├── history.ts        # Action history
+│   │   ├── jobs.ts           # Job swiping
+│   │   ├── notifications.ts  # Notifications
+│   │   ├── reported.ts       # Reported jobs
+│   │   ├── resumes.ts        # Resume management
+│   │   ├── saved.ts          # Saved jobs
+│   │   ├── settings.ts       # User settings
+│   │   ├── sync.ts           # Job sync (cron)
+│   │   ├── user-profile.ts   # User profile
+│   │   ├── users.ts          # User data management
+│   │   └── webhooks.ts       # Webhook handlers
+│   ├── services/
+│   │   ├── application.service.ts
+│   │   ├── auth.service.ts
+│   │   ├── cover-letter.service.ts
+│   │   ├── email-connection.service.ts
+│   │   ├── generation.service.ts
+│   │   ├── job.service.ts
+│   │   ├── notification.service.ts
+│   │   ├── resume.service.ts
+│   │   ├── scraper.service.ts
+│   │   └── workflow.service.ts
+│   ├── types/
+│   │   └── index.ts          # TypeScript type definitions
+│   └── index.ts              # Application entry point
+├── .env.example              # Environment variables template
+├── drizzle.config.ts         # Drizzle ORM configuration
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript configuration
+└── vercel.json               # Vercel deployment config
+```
+
+## API Endpoints (70+)
+
+### Authentication API
+- `POST /api/auth/register` - Email/password registration
+- `POST /api/auth/login` - Email/password login
+- `POST /api/auth/verify-email` - Verify email with token
+- `POST /api/auth/forgot-password` - Request password reset
+- `POST /api/auth/reset-password` - Reset password with token
+- `GET /api/auth/google` - Initiate Google OAuth
+- `GET /api/auth/google/callback` - Google OAuth callback
+- `GET /api/auth/github` - Initiate GitHub OAuth
+- `GET /api/auth/github/callback` - GitHub OAuth callback
+- `POST /api/auth/logout` - Logout (client-side token removal)
+- `GET /api/auth/me` - Get current user info
+
+### Jobs API
+- `GET /api/jobs` - Get pending jobs with filters
+  - Query params: `search`, `limit`, `location`, `salaryMin`, `salaryMax`
+- `GET /api/jobs/filters` - Get blocked companies list
+- `GET /api/jobs/skipped` - Get skipped jobs (paginated)
+  - Query params: `page`, `limit`, `search`
+- `POST /api/jobs/:id/accept` - Accept job and create application
+- `POST /api/jobs/:id/reject` - Reject job
+- `POST /api/jobs/:id/skip` - Skip job temporarily
 - `POST /api/jobs/:id/save` - Toggle save status
-- `POST /api/jobs/:id/rollback` - Rollback decision
-- `POST /api/jobs/:id/report` - Report a job
+- `DELETE /api/jobs/:id/save` - Unsave a job
+- `POST /api/jobs/:id/rollback` - Rollback previous decision
+- `POST /api/jobs/:id/report` - Report job (reasons: `fake`, `not_interested`, `dont_recommend_company`)
 - `POST /api/jobs/:id/unreport` - Remove report
-- `GET /api/jobs/skipped` - Get skipped jobs
 
-### Applications
-- `GET /api/applications` - Get applications (paginated)
+### Applications API
+- `GET /api/applications` - List applications (paginated)
+  - Query params: `page`, `limit`, `search`
+- `GET /api/applications/:id` - Get application details with job and documents
 - `PUT /api/applications/:id/stage` - Update application stage
+  - Stages: `Syncing`, `CV Check`, `Message Check`, `Being Applied`, `Applied`, `Interview 1`, `Next Interviews`, `Offer`, `Rejected`, `Accepted`, `Withdrawn`, `Failed`
+- `PUT /api/applications/:id/notes` - Update application notes
+- `GET /api/applications/:id/documents` - Get application documents (resume, cover letter)
+- `PUT /api/applications/:id/documents` - Update custom document URLs
+- `POST /api/applications/:id/cv/confirm` - Confirm CV for application
+- `POST /api/applications/:id/cv/reupload` - Reupload CV (multipart/form-data)
+- `POST /api/applications/:id/message/confirm` - Confirm cover letter message
+- `PUT /api/applications/:id/message` - Update cover letter message
+- `GET /api/applications/:id/download/resume` - Download generated resume (redirect to S3)
+- `GET /api/applications/:id/download/cover-letter` - Download cover letter (redirect to S3)
+- `POST /api/applications/:id/toggle-auto-status` - Toggle automatic status updates
 
-### Saved/Reported
+### Saved Jobs API
 - `GET /api/saved` - Get saved jobs (paginated)
-- `GET /api/reported` - Get reported jobs (paginated)
+  - Query params: `page`, `limit`, `search`
+- `GET /api/saved/export?format=csv` - Export saved jobs to CSV
+- `GET /api/saved/export?format=pdf` - Export saved jobs to PDF
 
-### History
-- `GET /api/history` - Get full action history
+### Notifications API
+- `GET /api/notifications` - Get notifications (paginated)
+  - Query params: `page`, `limit`
+- `GET /api/notifications/stream` - SSE endpoint for real-time notifications
+- `GET /api/notifications/unread-count` - Get unread notification count
+- `POST /api/notifications/:id/read` - Mark notification as read
+- `POST /api/notifications/read-all` - Mark all notifications as read
+- `DELETE /api/notifications/:id` - Delete single notification
+- `DELETE /api/notifications` - Clear all notifications
 
-### Settings
+### Email Connections API
+- `GET /api/email-connections` - List connected email accounts
+- `POST /api/email-connections/gmail` - Start Gmail OAuth flow
+- `GET /api/email-connections/gmail/callback` - Gmail OAuth callback
+- `POST /api/email-connections/outlook` - Start Outlook OAuth flow
+- `GET /api/email-connections/outlook/callback` - Outlook OAuth callback
+- `POST /api/email-connections/yahoo` - Start Yahoo OAuth flow
+- `GET /api/email-connections/yahoo/callback` - Yahoo OAuth callback
+- `POST /api/email-connections/imap` - Add IMAP email connection
+- `DELETE /api/email-connections/:id` - Remove email connection
+- `POST /api/email-connections/:id/test` - Test email connection
+- `POST /api/email-connections/:id/sync` - Sync credentials to Stage Updater service
+
+### Settings & User Profile API
 - `GET /api/settings` - Get user settings
 - `PUT /api/settings` - Update user settings
+  - Fields: `theme`, `emailNotifications`, `pushNotifications`, `automationStages`, `autoGenerateResume`, `autoGenerateCoverLetter`, `autoGenerateEmail`, `aiFilteringEnabled`
+- `GET /api/user-profile` - Get user profile
+- `PUT /api/user-profile` - Update user profile
+  - Fields: `firstName`, `lastName`, `phone`, `linkedinUrl`, `address`, `city`, `state`, `zipCode`, `country`
+- `POST /api/user-profile/base-resume` - Upload base resume (multipart/form-data)
+- `POST /api/user-profile/base-cover-letter` - Upload base cover letter (multipart/form-data)
+- `DELETE /api/user-profile/base-resume` - Remove base resume
+- `DELETE /api/user-profile/base-cover-letter` - Remove base cover letter
 
-### Resumes
-- `GET /api/resumes` - List resume files
-- `POST /api/resumes` - Upload resume file
+### Users API (GDPR)
+- `POST /api/users/me/export` - Export all user data (GDPR compliance)
+- `DELETE /api/users/me` - Delete user account and all data
+
+### Resumes API
+- `GET /api/resumes` - List uploaded resume files
+- `POST /api/resumes` - Upload resume file (multipart/form-data)
 - `GET /api/resumes/:id` - Get resume details
 - `DELETE /api/resumes/:id` - Delete resume
-- `PATCH /api/resumes/:id/primary` - Set as primary
+- `PATCH /api/resumes/:id/primary` - Set resume as primary
+- `PATCH /api/resumes/:id/reference` - Set resume as reference
 
-### Generation
-- `POST /api/jobs/:id/generate/resume` - Generate tailored resume
-- `POST /api/jobs/:id/generate/cover-letter` - Generate cover letter
+### Cover Letters API
+- `GET /api/cover-letters` - List uploaded cover letters
+- `GET /api/cover-letters/:id` - Get cover letter details
+- `PATCH /api/cover-letters/:id/reference` - Set cover letter as reference
+
+### Generation API (AI Documents)
+- `POST /api/jobs/:id/generate/resume` - Generate tailored resume for job
+  - Body: `{ baseResumeId: "uuid" }`
+- `POST /api/jobs/:id/generate/cover-letter` - Generate cover letter for job
 - `GET /api/generated/resumes` - List generated resumes
 - `GET /api/generated/cover-letters` - List generated cover letters
 - `GET /api/generated/resumes/:id/download` - Download generated resume
 - `GET /api/generated/cover-letters/:id/download` - Download generated cover letter
 
-### Email Sync
-- `POST /api/email/sync` - Trigger email sync
-- `GET /api/email/status` - Get sync status
+### History & Reporting API
+- `GET /api/history` - Get action history (last 100 actions)
+- `GET /api/reported` - Get reported jobs (paginated)
+  - Query params: `page`, `limit`, `search`
 
-### Users
-- `POST /api/users/me/export` - Export user data
-- `DELETE /api/users/me` - Delete account
+### Admin API
+- `POST /api/admin/normalize-salaries` - Batch normalize salary data
+- `GET /api/admin/health` - Health check endpoint
 
-### Sync
-- `POST /api/sync` - Trigger job sync (cron)
+### Sync API (Cron)
+- `POST /api/sync` - Trigger job scraping sync (no auth for cron)
 - `GET /api/sync/status` - Get last sync status
 
-### Health
-- `GET /api/health` - Health check
+### Webhooks API
+- `POST /api/webhooks/status-update` - Receive application status updates from Stage Updater
+- `POST /api/webhooks/generation-complete` - Receive AI generation completion callbacks
+- `POST /api/webhooks/application-submitted` - Receive application submission confirmations
+
+### Health Check
+- `GET /api/health` - Basic health check
+
+## Application Stages
+
+Applications flow through the following stages:
+
+| Stage | Description |
+|-------|-------------|
+| **Syncing** | Initial stage when application is created |
+| **CV Check** | Resume is being reviewed/verified by user |
+| **Message Check** | Cover letter is being reviewed/verified by user |
+| **Being Applied** | Application is in progress of being submitted |
+| **Applied** | Application has been successfully submitted |
+| **Interview 1** | First interview scheduled/completed |
+| **Next Interviews** | Additional interview rounds |
+| **Offer** | Job offer received |
+| **Rejected** | Application was rejected by employer |
+| **Accepted** | Job offer accepted |
+| **Withdrawn** | Application withdrawn by user |
+| **Failed** | Application submission failed |
+
+## Microservices Integration
+
+The server integrates with multiple microservices for extended functionality:
+
+| Service | Purpose | Environment Variables |
+|---------|---------|----------------------|
+| **Scraper** | Job scraping from various sources | `SCRAPER_SERVICE_URL`, `SCRAPER_SERVICE_KEY` |
+| **Resume AI** | AI-powered resume generation | `RESUME_AI_SERVICE_URL`, `RESUME_AI_SERVICE_KEY` |
+| **Cover Letter AI** | AI-powered cover letter generation | `COVER_LETTER_AI_SERVICE_URL`, `COVER_LETTER_AI_SERVICE_KEY` |
+| **Stage Updater** | Email monitoring for application status updates | `STAGE_UPDATER_SERVICE_URL`, `STAGE_UPDATER_SERVICE_KEY` |
+| **Job Filter** | AI-based job filtering | `JOB_FILTER_SERVICE_URL` |
+| **Application Sender** | Automated application submission | `APPLICATION_SENDER_SERVICE_URL` |
 
 ## Response Format
 
-All endpoints return responses in the following format:
+All endpoints return standardized JSON responses:
 
+### Success Response
 ```json
 {
   "success": true,
-  "data": { ... },
+  "data": {
+    // Response data
+  },
   "meta": {
-    "requestId": "req_123456789",
+    "requestId": "req_abc123",
     "timestamp": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
 
-Error responses:
-
+### Error Response
 ```json
 {
   "success": false,
   "error": {
-    "code": "ERROR_CODE",
-    "message": "Error message",
-    "details": { ... }
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request body",
+    "details": [
+      {
+        "field": "email",
+        "message": "Invalid email format"
+      }
+    ]
   },
   "meta": {
-    "requestId": "req_123456789",
+    "requestId": "req_abc123",
     "timestamp": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
 
-## Deployment
-
-This project is configured for deployment on Vercel:
-
-```bash
-# Deploy to Vercel
-vercel deploy
+### Paginated Response
+```json
+{
+  "success": true,
+  "data": {
+    "items": [...],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 100,
+      "totalPages": 5
+    }
+  },
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
 ```
-
-Make sure to configure all environment variables in your Vercel project settings.
 
 ## Environment Variables
 
-See `.env.example` for required environment variables.
+See `.env.example` for a complete list of required environment variables with descriptions.
+
+Key variables include:
+- `DATABASE_URL` - PostgreSQL connection string
+- `JWT_SECRET` - Secret for JWT token signing
+- `S3_*` - S3-compatible storage configuration
+- Microservice URLs and API keys
+- OAuth credentials (Google, GitHub, Gmail, Outlook, Yahoo)
+- `ENCRYPTION_KEY` - For encrypting sensitive data (email passwords)
+
+## Deployment
+
+### Vercel Deployment
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel deploy
+
+# Deploy to production
+vercel --prod
+```
+
+### Environment Setup
+
+1. Configure all environment variables in Vercel dashboard
+2. Set up PostgreSQL database (Neon recommended)
+3. Configure S3-compatible storage (Cloudflare R2 recommended)
+4. Set up OAuth applications (Google, GitHub)
+5. Configure microservice endpoints
+
+## Security Features
+
+- 🔒 **JWT Authentication** with configurable expiration
+- 🔒 **Password Hashing** with bcrypt
+- 🔒 **Email Credential Encryption** using AES-256
+- 🔒 **Rate Limiting** (100 req/min per user)
+- 🔒 **Request ID Tracking** for audit trails
+- 🔒 **Webhook Signature Verification**
+- 🔒 **CORS Protection**
+- 🔒 **SQL Injection Prevention** via Drizzle ORM
+- 🔒 **Input Validation** with Zod schemas
+
+## Additional Documentation
+
+- See `docs/API.md` for detailed API documentation with examples
+- See `docs/WORKFLOW.md` for application workflow processes
+- See `MICROSERVICE_IMPLEMENTATION.md` for microservice integration details
+- See `SECURE_CREDENTIALS.md` for credential handling documentation
 
 ## License
 
