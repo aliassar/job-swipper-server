@@ -126,20 +126,20 @@ Syncing → CV Check → Message Check → Being Applied → Applied →
 
 ### Stage Descriptions
 
-| Stage | Description | User Actions Required |
-|-------|-------------|----------------------|
-| **Syncing** | Initial creation, waiting for document generation | None (automatic) |
-| **CV Check** | Resume ready for review | Review and confirm or reupload |
-| **Message Check** | Cover letter ready for review | Review and confirm or edit |
-| **Being Applied** | Application in submission process | None (automatic via Application Sender) |
-| **Applied** | Successfully submitted to employer | Monitor for responses |
-| **Interview 1** | First interview scheduled/completed | Update manually or auto via email monitoring |
-| **Next Interviews** | Additional interview rounds | Update manually or auto via email monitoring |
-| **Offer** | Job offer received | Accept or decline |
-| **Rejected** | Application rejected by employer | None (terminal state) |
-| **Accepted** | Job offer accepted by user | None (terminal state) |
-| **Withdrawn** | User withdrew application | None (terminal state) |
-| **Failed** | Application submission failed | Review error and retry |
+| Stage | Description | Terminal State |
+|-------|-------------|----------------|
+| **Syncing** | Initial creation, waiting for document generation | No |
+| **CV Check** | Resume ready for review | No |
+| **Message Check** | Cover letter ready for review | No |
+| **Being Applied** | Application in submission process | No |
+| **Applied** | Successfully submitted to employer | No |
+| **Interview 1** | First interview scheduled/completed | No |
+| **Next Interviews** | Additional interview rounds | No |
+| **Offer** | Job offer received | No |
+| **Rejected** | Application rejected by employer | Yes (terminal) |
+| **Accepted** | Job offer accepted by user | Yes (terminal) |
+| **Withdrawn** | User withdrew application | Yes (terminal) |
+| **Failed** | Application submission failed | Yes (terminal) |
 
 ### Manual Stage Updates
 

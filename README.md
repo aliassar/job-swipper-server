@@ -156,7 +156,7 @@ job-swipper-server/
 └── vercel.json               # Vercel deployment config
 ```
 
-## API Endpoints (70+)
+## API Endpoints (96)
 
 ### Authentication API
 - `POST /api/auth/register` - Email/password registration
