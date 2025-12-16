@@ -5,6 +5,7 @@ import { generationService } from '../services/generation.service';
 import { formatResponse } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
 import { storage } from '../lib/storage';
+import { validateUuidParam } from '../middleware/validate-params';
 
 const generation = new Hono<AppContext>();
 
@@ -14,7 +15,7 @@ const generateResumeSchema = z.object({
 });
 
 // POST /api/jobs/:id/generate/resume - Generate tailored resume
-generation.post('/jobs/:id/generate/resume', async (c) => {
+generation.post('/jobs/:id/generate/resume', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const jobId = c.req.param('id');
@@ -37,7 +38,7 @@ generation.post('/jobs/:id/generate/resume', async (c) => {
 });
 
 // POST /api/jobs/:id/generate/cover-letter - Generate cover letter
-generation.post('/jobs/:id/generate/cover-letter', async (c) => {
+generation.post('/jobs/:id/generate/cover-letter', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const jobId = c.req.param('id');
@@ -72,7 +73,7 @@ generation.get('/generated/cover-letters', async (c) => {
 });
 
 // GET /api/generated/resumes/:id/download - Download generated resume
-generation.get('/generated/resumes/:id/download', async (c) => {
+generation.get('/generated/resumes/:id/download', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const resumeId = c.req.param('id');
@@ -90,7 +91,7 @@ generation.get('/generated/resumes/:id/download', async (c) => {
 });
 
 // GET /api/generated/cover-letters/:id/download - Download generated cover letter
-generation.get('/generated/cover-letters/:id/download', async (c) => {
+generation.get('/generated/cover-letters/:id/download', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const coverLetterId = c.req.param('id');

@@ -3,6 +3,7 @@ import { AppContext } from '../types';
 import { resumeService } from '../services/resume.service';
 import { formatResponse } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
+import { validateUuidParam } from '../middleware/validate-params';
 
 const resumes = new Hono<AppContext>();
 
@@ -40,7 +41,7 @@ resumes.post('/', async (c) => {
 });
 
 // GET /api/resumes/:id - Get resume details
-resumes.get('/:id', async (c) => {
+resumes.get('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const resumeId = c.req.param('id');
@@ -51,7 +52,7 @@ resumes.get('/:id', async (c) => {
 });
 
 // DELETE /api/resumes/:id - Delete resume
-resumes.delete('/:id', async (c) => {
+resumes.delete('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const resumeId = c.req.param('id');
@@ -64,7 +65,7 @@ resumes.delete('/:id', async (c) => {
 });
 
 // PATCH /api/resumes/:id/primary - Set as primary
-resumes.patch('/:id/primary', async (c) => {
+resumes.patch('/:id/primary', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const resumeId = c.req.param('id');
@@ -75,7 +76,7 @@ resumes.patch('/:id/primary', async (c) => {
 });
 
 // PATCH /api/resumes/:id/reference - Set as reference
-resumes.patch('/:id/reference', async (c) => {
+resumes.patch('/:id/reference', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const resumeId = c.req.param('id');

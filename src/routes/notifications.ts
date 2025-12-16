@@ -3,6 +3,7 @@ import { stream } from 'hono/streaming';
 import { AppContext } from '../types';
 import { notificationService } from '../services/notification.service';
 import { formatResponse, parseIntSafe } from '../lib/utils';
+import { validateUuidParam } from '../middleware/validate-params';
 
 const notifications = new Hono<AppContext>();
 
@@ -73,7 +74,7 @@ notifications.get('/stream', async (c) => {
 });
 
 // POST /notifications/:id/read - Mark as read
-notifications.post('/:id/read', async (c) => {
+notifications.post('/:id/read', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const notificationId = c.req.param('id');
@@ -98,7 +99,7 @@ notifications.post('/read-all', async (c) => {
 });
 
 // DELETE /notifications/:id - Delete single notification
-notifications.delete('/:id', async (c) => {
+notifications.delete('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const notificationId = c.req.param('id');

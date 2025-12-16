@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AppContext } from '../types';
 import { coverLetterService } from '../services/cover-letter.service';
 import { formatResponse } from '../lib/utils';
+import { validateUuidParam } from '../middleware/validate-params';
 
 const coverLetters = new Hono<AppContext>();
 
@@ -16,7 +17,7 @@ coverLetters.get('/', async (c) => {
 });
 
 // GET /api/cover-letters/:id - Get cover letter details
-coverLetters.get('/:id', async (c) => {
+coverLetters.get('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const coverLetterId = c.req.param('id');
@@ -27,7 +28,7 @@ coverLetters.get('/:id', async (c) => {
 });
 
 // PATCH /api/cover-letters/:id/reference - Set as reference
-coverLetters.patch('/:id/reference', async (c) => {
+coverLetters.patch('/:id/reference', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const coverLetterId = c.req.param('id');
