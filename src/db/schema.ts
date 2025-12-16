@@ -148,7 +148,7 @@ export const emailVerificationTokens = pgTable('email_verification_tokens', {
 // User settings table
 export const userSettings = pgTable('user_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull().unique(),
+  userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
   theme: text('theme').notNull().default('light'),
   emailNotifications: boolean('email_notifications').notNull().default(true),
   pushNotifications: boolean('push_notifications').notNull().default(true),
@@ -176,7 +176,7 @@ export const userSettings = pgTable('user_settings', {
 // Resume files table
 export const resumeFiles = pgTable('resume_files', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   filename: text('filename').notNull(),
   fileUrl: text('file_url').notNull(),
   isPrimary: boolean('is_primary').notNull().default(false),
@@ -221,7 +221,7 @@ export const jobs = pgTable('jobs', {
 // User job status table
 export const userJobStatus = pgTable('user_job_status', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   status: userJobStatusEnum('status').notNull().default('pending'),
   saved: boolean('saved').notNull().default(false),
@@ -234,7 +234,7 @@ export const userJobStatus = pgTable('user_job_status', {
 // Reported jobs table
 export const reportedJobs = pgTable('reported_jobs', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   reason: reportReasonEnum('reason').notNull(),
   details: text('details'),
@@ -245,7 +245,7 @@ export const reportedJobs = pgTable('reported_jobs', {
 // Applications table
 export const applications = pgTable('applications', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   stage: applicationStageEnum('stage').notNull().default('Syncing'),
   resumeFileId: uuid('resume_file_id').references(() => resumeFiles.id),
@@ -290,7 +290,7 @@ export const followUpTracking = pgTable('follow_up_tracking', {
 // Action history table
 export const actionHistory = pgTable('action_history', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   actionType: actionTypeEnum('action_type').notNull(),
   previousStatus: userJobStatusEnum('previous_status'),
@@ -302,7 +302,7 @@ export const actionHistory = pgTable('action_history', {
 // Generated resumes table
 export const generatedResumes = pgTable('generated_resumes', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   applicationId: uuid('application_id').references(() => applications.id, { onDelete: 'cascade' }),
   baseResumeId: uuid('base_resume_id').references(() => resumeFiles.id),
@@ -315,7 +315,7 @@ export const generatedResumes = pgTable('generated_resumes', {
 // Generated cover letters table
 export const generatedCoverLetters = pgTable('generated_cover_letters', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   applicationId: uuid('application_id').references(() => applications.id, { onDelete: 'cascade' }),
   fileUrl: text('file_url').notNull(),

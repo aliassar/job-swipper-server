@@ -33,6 +33,22 @@ export function parseBoolSafe(value: string | undefined, defaultValue: boolean):
 }
 
 /**
+ * Escape special characters in SQL LIKE patterns to prevent unexpected behavior.
+ * Escapes %, _, and \ characters which have special meaning in LIKE queries.
+ * This is compatible with PostgreSQL's default backslash escaping.
+ * 
+ * @param pattern - The search pattern to escape
+ * @returns Escaped pattern safe for use in LIKE queries
+ * 
+ * @example
+ * escapeLikePattern('test%value') // Returns 'test\\%value'
+ * escapeLikePattern('file_name') // Returns 'file\\_name'
+ */
+export function escapeLikePattern(pattern: string): string {
+  return pattern.replace(/[%_\\]/g, '\\$&');
+}
+
+/**
  * Extract S3 key from file URL
  * Handles various URL formats safely
  */
