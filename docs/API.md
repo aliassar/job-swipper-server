@@ -17,6 +17,8 @@ Complete API reference with request/response examples for all endpoints.
 - [Cover Letters API](#cover-letters-api)
 - [Generation API](#generation-api)
 - [History API](#history-api)
+- [Application History API](#application-history-api)
+- [Email Sync API](#email-sync-api)
 - [Reported Jobs API](#reported-jobs-api)
 - [Admin API](#admin-api)
 - [Sync API](#sync-api)
@@ -1905,6 +1907,149 @@ Get history of all user actions (last 100).
       }
     }
   ],
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+---
+
+## Application History API
+
+### Get Application History
+
+Get filtered application history with advanced search.
+
+**Endpoint:** `GET /api/application-history`
+
+**Query Parameters:**
+- `startDate` (optional) - Filter by start date (ISO 8601)
+- `endDate` (optional) - Filter by end date (ISO 8601)
+- `search` (optional) - Search by company or position
+- `stage` (optional) - Filter by application stage
+- `page` (optional, default: 1)
+- `limit` (optional, default: 20)
+
+**Example Request:**
+```
+GET /api/application-history?startDate=2024-01-01&stage=Applied&page=1&limit=20
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "app-uuid",
+        "jobId": "job-uuid",
+        "stage": "Applied",
+        "appliedAt": "2024-01-15T00:00:00.000Z",
+        "createdAt": "2024-01-15T00:00:00.000Z",
+        "job": {
+          "company": "Tech Corp",
+          "position": "Software Engineer",
+          "location": "New York, NY"
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45,
+      "totalPages": 3
+    }
+  },
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Export Application History (CSV)
+
+Export filtered application history to CSV.
+
+**Endpoint:** `GET /api/application-history/export?format=csv`
+
+**Query Parameters:**
+- `format` (required) - Must be `csv`
+- `startDate` (optional)
+- `endDate` (optional)
+- `search` (optional)
+- `stage` (optional)
+
+**Response:** CSV file download with headers:
+```
+Company,Position,Stage,Applied At,Created At,Location
+Tech Corp,Software Engineer,Applied,2024-01-15T00:00:00.000Z,2024-01-15T00:00:00.000Z,New York NY
+```
+
+### Export Application History (PDF)
+
+Export filtered application history to PDF.
+
+**Endpoint:** `GET /api/application-history/export?format=pdf`
+
+**Query Parameters:**
+- `format` (required) - Must be `pdf`
+- `startDate` (optional)
+- `endDate` (optional)
+- `search` (optional)
+- `stage` (optional)
+
+**Response:** PDF file download with formatted application history.
+
+---
+
+## Email Sync API
+
+**Note:** This is a legacy API. New implementations should use the Email Connections API with Stage Updater microservice.
+
+### Trigger Email Sync
+
+Manually trigger email synchronization.
+
+**Endpoint:** `POST /api/email/sync`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Email sync triggered",
+    "emailsProcessed": 15,
+    "applicationsUpdated": 3,
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  },
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Get Email Sync Status
+
+Get status of last email sync.
+
+**Endpoint:** `GET /api/email/status`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "lastSync": "2024-01-01T00:00:00.000Z",
+    "status": "success",
+    "emailsProcessed": 15,
+    "applicationsUpdated": 3,
+    "errors": 0
+  },
   "meta": {
     "requestId": "req_abc123",
     "timestamp": "2024-01-01T00:00:00.000Z"

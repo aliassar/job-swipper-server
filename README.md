@@ -274,6 +274,14 @@ job-swipper-server/
 - `GET /api/history` - Get action history (last 100 actions)
 - `GET /api/reported` - Get reported jobs (paginated)
   - Query params: `page`, `limit`, `search`
+- `GET /api/application-history` - Get application history with filters
+  - Query params: `startDate`, `endDate`, `search`, `stage`, `page`, `limit`
+- `GET /api/application-history/export?format=csv` - Export application history to CSV
+- `GET /api/application-history/export?format=pdf` - Export application history to PDF
+
+### Email Sync API (Legacy)
+- `POST /api/email/sync` - Trigger email sync
+- `GET /api/email/status` - Get email sync status
 
 ### Admin API
 - `POST /api/admin/normalize-salaries` - Batch normalize salary data
