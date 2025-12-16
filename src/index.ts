@@ -14,6 +14,9 @@ app.use('*', loggerMiddleware);
 app.use('*', rateLimitMiddleware);
 
 // Mount API routes
+// API v1 for future versioning
+app.route('/api/v1', api);
+// Keep /api for backward compatibility
 app.route('/api', api);
 
 // Root health check
