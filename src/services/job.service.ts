@@ -7,15 +7,7 @@ import { timerService } from './timer.service';
 import { jobFilterClient } from '../lib/microservice-client';
 import type { JobFilterRequest, JobFilterResponse, FilterType } from '../lib/microservices';
 import PDFDocument from 'pdfkit';
-
-/**
- * Escape special characters in LIKE patterns to prevent unexpected behavior
- * @param pattern - The search pattern to escape
- * @returns Escaped pattern safe for use in LIKE queries
- */
-function escapeLikePattern(pattern: string): string {
-  return pattern.replace(/[%_\\]/g, '\\$&');
-}
+import { escapeLikePattern } from '../lib/utils';
 
 export const jobService = {
   async getPendingJobs(

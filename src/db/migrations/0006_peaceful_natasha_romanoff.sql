@@ -14,15 +14,15 @@ ALTER TABLE "user_settings" ADD COLUMN "user_id_uuid" uuid;
 --> statement-breakpoint
 
 -- Step 2: Migrate existing data (convert text to uuid where valid)
--- Only migrates rows where user_id is a valid UUID format
-UPDATE "action_history" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "applications" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "generated_cover_letters" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "generated_resumes" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "reported_jobs" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "resume_files" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "user_job_status" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-UPDATE "user_settings" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+-- Only migrates rows where user_id is a valid UUID format (case-insensitive)
+UPDATE "action_history" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "applications" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "generated_cover_letters" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "generated_resumes" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "reported_jobs" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "resume_files" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "user_job_status" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+UPDATE "user_settings" SET "user_id_uuid" = "user_id"::uuid WHERE "user_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
 --> statement-breakpoint
 

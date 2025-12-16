@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe, parseSalaryRange } from '../lib/utils';
+import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe, parseSalaryRange, escapeLikePattern } from '../lib/utils';
 
 describe('Utils', () => {
   describe('formatResponse', () => {
@@ -95,6 +95,43 @@ describe('Utils', () => {
       const result = parseSalaryRange('50 - 80k');
       expect(result.min).toBe(50);
       expect(result.max).toBe(80000);
+    });
+  });
+
+  describe('escapeLikePattern', () => {
+    it('should escape % character', () => {
+      const result = escapeLikePattern('test%value');
+      expect(result).toBe('test\\%value');
+    });
+
+    it('should escape _ character', () => {
+      const result = escapeLikePattern('test_value');
+      expect(result).toBe('test\\_value');
+    });
+
+    it('should escape \\ character', () => {
+      const result = escapeLikePattern('test\\value');
+      expect(result).toBe('test\\\\value');
+    });
+
+    it('should escape multiple special characters', () => {
+      const result = escapeLikePattern('test%_\\value');
+      expect(result).toBe('test\\%\\_\\\\value');
+    });
+
+    it('should not modify strings without special characters', () => {
+      const result = escapeLikePattern('test value');
+      expect(result).toBe('test value');
+    });
+
+    it('should handle empty string', () => {
+      const result = escapeLikePattern('');
+      expect(result).toBe('');
+    });
+
+    it('should handle string with only special characters', () => {
+      const result = escapeLikePattern('%_\\');
+      expect(result).toBe('\\%\\_\\\\');
     });
   });
 });
