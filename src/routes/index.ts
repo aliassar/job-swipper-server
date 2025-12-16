@@ -158,21 +158,36 @@ api.route('/auth', auth);
 api.route('/webhooks', webhooks);
 
 // All other routes require authentication
+// Note: Apply middleware to both root routes AND wildcard patterns
+// Wildcard patterns like '/jobs/*' only match nested routes, not the root route
 api.use('/jobs', authMiddleware);
 api.use('/jobs/*', authMiddleware);
+api.use('/applications', authMiddleware);
 api.use('/applications/*', authMiddleware);
+api.use('/application-history', authMiddleware);
 api.use('/application-history/*', authMiddleware);
+api.use('/saved', authMiddleware);
 api.use('/saved/*', authMiddleware);
+api.use('/reported', authMiddleware);
 api.use('/reported/*', authMiddleware);
+api.use('/history', authMiddleware);
 api.use('/history/*', authMiddleware);
+api.use('/settings', authMiddleware);
 api.use('/settings/*', authMiddleware);
+api.use('/resumes', authMiddleware);
 api.use('/resumes/*', authMiddleware);
+api.use('/cover-letters', authMiddleware);
 api.use('/cover-letters/*', authMiddleware);
 api.use('/generated/*', authMiddleware);
+api.use('/email', authMiddleware);
 api.use('/email/*', authMiddleware);
+api.use('/email-connections', authMiddleware);
 api.use('/email-connections/*', authMiddleware);
+api.use('/users', authMiddleware);
 api.use('/users/*', authMiddleware);
+api.use('/user-profile', authMiddleware);
 api.use('/user-profile/*', authMiddleware);
+api.use('/notifications', authMiddleware);
 api.use('/notifications/*', authMiddleware);
 
 // Mount routes
