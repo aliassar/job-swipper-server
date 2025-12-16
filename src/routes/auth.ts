@@ -32,6 +32,9 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
+// Helper function to get frontend URL
+const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
+
 // POST /auth/register - Email/password signup
 auth.post('/register', async (c) => {
   const requestId = c.get('requestId');
@@ -175,10 +178,10 @@ auth.get('/google/callback', async (c) => {
 
     const { token } = await authService.googleOAuthCallback(code);
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getFrontendUrl();
     return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=google`);
   } catch (error) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getFrontendUrl();
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
@@ -211,10 +214,10 @@ auth.get('/github/callback', async (c) => {
 
     const { token } = await authService.githubOAuthCallback(code);
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getFrontendUrl();
     return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=github`);
   } catch (error) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getFrontendUrl();
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
