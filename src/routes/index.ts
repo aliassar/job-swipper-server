@@ -24,78 +24,118 @@ import admin from './admin';
 
 const api = new Hono<AppContext>();
 
-// Health check cache to reduce database load
-let healthCheckCache: {
-  status: string;
-  lastCheck: number;
-  dbStatus: string;
-  dbError?: string;
-} = {
-  status: 'unknown',
-  lastCheck: 0,
-  dbStatus: 'unknown',
-};
+/**
+ * Thread-safe health check cache for serverless environments
+ * Prevents concurrent database checks using a pending promise pattern
+ */
+class HealthCheckCache {
+  private cache: {
+    status: string;
+    lastCheck: number;
+    dbStatus: string;
+    dbError?: string;
+  } | null = null;
+  
+  private pendingCheck: Promise<{
+    status: string;
+    lastCheck: number;
+    dbStatus: string;
+    dbError?: string;
+    cached: boolean;
+  }> | null = null;
 
+  /**
+   * Get cached health check or perform a new check
+   * @param ttl - Time to live for cache in milliseconds
+   * @param checker - Function to perform health check
+   * @returns Health check result with cached flag
+   */
+  async getOrRefresh(
+    ttl: number,
+    checker: () => Promise<{
+      status: string;
+      lastCheck: number;
+      dbStatus: string;
+      dbError?: string;
+    }>
+  ) {
+    const now = Date.now();
+    
+    // Return cached result if available and fresh
+    if (this.cache && now - this.cache.lastCheck < ttl) {
+      return { ...this.cache, cached: true };
+    }
+
+    // If a check is already pending, wait for it
+    if (this.pendingCheck) {
+      return this.pendingCheck;
+    }
+
+    // Start a new check
+    this.pendingCheck = checker()
+      .then((result) => {
+        this.cache = result;
+        return { ...result, cached: false };
+      })
+      .finally(() => {
+        this.pendingCheck = null;
+      });
+
+    return this.pendingCheck;
+  }
+}
+
+const healthCheckCache = new HealthCheckCache();
 const HEALTH_CHECK_CACHE_TTL = 30000; // 30 seconds
 
-// Health check (no auth required)
+/**
+ * GET /health - Health check endpoint
+ * 
+ * Performs a database connectivity check with caching to reduce load.
+ * Cache is thread-safe for serverless environments.
+ * 
+ * @returns Health status with database connectivity info
+ */
 api.get('/health', async (c) => {
   const requestId = c.get('requestId');
-  const now = Date.now();
   
-  // Use cached health status if available and fresh
-  if (now - healthCheckCache.lastCheck < HEALTH_CHECK_CACHE_TTL) {
-    const isHealthy = healthCheckCache.dbStatus === 'healthy';
-    return c.json(
-      {
-        success: isHealthy,
-        data: {
-          status: isHealthy ? 'healthy' : 'degraded',
-          timestamp: new Date().toISOString(),
-          database: healthCheckCache.dbStatus,
-          cached: true,
-          ...(healthCheckCache.dbError && { dbError: healthCheckCache.dbError }),
-        },
-        error: null,
-        requestId,
-      },
-      isHealthy ? 200 : 503
-    );
-  }
+  const result = await healthCheckCache.getOrRefresh(
+    HEALTH_CHECK_CACHE_TTL,
+    async () => {
+      // Perform actual database check
+      const { db } = await import('../lib/db');
+      const { sql } = await import('drizzle-orm');
+      
+      let dbStatus = 'healthy';
+      let dbError = undefined;
+      
+      try {
+        await db.execute(sql`SELECT 1`);
+      } catch (error) {
+        dbStatus = 'unhealthy';
+        dbError = error instanceof Error ? error.message : 'Unknown database error';
+      }
+      
+      return {
+        status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
+        lastCheck: Date.now(),
+        dbStatus,
+        dbError,
+      };
+    }
+  );
   
-  // Perform actual database check
-  const { db } = await import('../lib/db');
-  const { sql } = await import('drizzle-orm');
-  
-  let dbStatus = 'healthy';
-  let dbError = undefined;
-  
-  try {
-    await db.execute(sql`SELECT 1`);
-  } catch (error) {
-    dbStatus = 'unhealthy';
-    dbError = error instanceof Error ? error.message : 'Unknown database error';
-  }
-  
-  // Update cache
-  healthCheckCache = {
-    status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
-    lastCheck: now,
-    dbStatus,
-    dbError,
-  };
-  
-  const isHealthy = dbStatus === 'healthy';
+  const isHealthy = result.dbStatus === 'healthy';
   
   return c.json(
     {
       success: isHealthy,
       data: {
-        status: isHealthy ? 'healthy' : 'degraded',
+        status: result.status,
         timestamp: new Date().toISOString(),
-        database: dbStatus,
-        cached: false,
-        ...(dbError && { dbError }),
+        database: result.dbStatus,
+        cached: result.cached,
+        ...(result.dbError && { dbError: result.dbError }),
       },
       error: null,
       requestId,

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { AppContext } from '../types';
 import { applicationService } from '../services/application.service';
-import { formatResponse, parseIntSafe, extractS3KeyFromUrl } from '../lib/utils';
+import { formatResponse, parseIntSafe, extractS3KeyFromUrl, sanitizeSearchInput } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
 import { storage } from '../lib/storage';
 import { validateUuidParam } from '../middleware/validate-params';
@@ -40,20 +40,37 @@ const updateDocumentsSchema = z.object({
   coverLetterUrl: z.string().url().optional().nullable(),
 });
 
-// GET /api/applications - Get applications
+/**
+ * GET /api/applications - Get applications
+ * 
+ * Query parameters:
+ * @param page - Page number (default: 1)
+ * @param limit - Results per page (default: 20)
+ * @param search - Optional search term
+ * 
+ * @returns Paginated list of applications
+ */
 applications.get('/', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const page = parseIntSafe(c.req.query('page'), 1);
   const limit = parseIntSafe(c.req.query('limit'), 20);
-  const search = c.req.query('search');
+  const search = sanitizeSearchInput(c.req.query('search'));
 
   const result = await applicationService.getApplications(auth.userId, page, limit, search);
 
   return c.json(formatResponse(true, result, null, requestId));
 });
 
-// GET /api/applications/:id - Full details with job and docs
+/**
+ * GET /api/applications/:id - Get full application details with job and documents
+ * 
+ * @param id - Application UUID
+ * 
+ * @returns Application details including job, resume, and cover letter info
+ * @throws 400 - If application ID is invalid
+ * @throws 404 - If application not found
+ */
 applications.get('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -64,7 +81,18 @@ applications.get('/:id', validateUuidParam('id'), async (c) => {
   return c.json(formatResponse(true, application, null, requestId));
 });
 
-// PUT /api/applications/:id/stage - Update application stage
+/**
+ * PUT /api/applications/:id/stage - Update application stage
+ * 
+ * @param id - Application UUID
+ * 
+ * Request body:
+ * @param stage - New stage value
+ * 
+ * @returns Updated application
+ * @throws 400 - If application ID or stage is invalid
+ * @throws 404 - If application not found
+ */
 applications.put('/:id/stage', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -86,7 +114,18 @@ applications.put('/:id/stage', validateUuidParam('id'), async (c) => {
   return c.json(formatResponse(true, application, null, requestId));
 });
 
-// PUT /api/applications/:id/notes - Update notes
+/**
+ * PUT /api/applications/:id/notes - Update notes
+ * 
+ * @param id - Application UUID
+ * 
+ * Request body:
+ * @param notes - Notes text
+ * 
+ * @returns Updated application
+ * @throws 400 - If application ID is invalid
+ * @throws 404 - If application not found
+ */
 applications.put('/:id/notes', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');

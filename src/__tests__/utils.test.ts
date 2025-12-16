@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe, parseSalaryRange, escapeLikePattern } from '../lib/utils';
+import { formatResponse, generateRequestId, parseIntSafe, parseBoolSafe, parseSalaryRange, escapeLikePattern, sanitizeSearchInput, validateSalaryRange } from '../lib/utils';
 
 describe('Utils', () => {
   describe('formatResponse', () => {
@@ -132,6 +132,85 @@ describe('Utils', () => {
     it('should handle string with only special characters', () => {
       const result = escapeLikePattern('%_\\');
       expect(result).toBe('\\%\\_\\\\');
+    });
+  });
+
+  describe('sanitizeSearchInput', () => {
+    it('should trim whitespace', () => {
+      const result = sanitizeSearchInput('  software engineer  ');
+      expect(result).toBe('software engineer');
+    });
+
+    it('should limit length to default 200 characters', () => {
+      const longString = 'a'.repeat(300);
+      const result = sanitizeSearchInput(longString);
+      expect(result?.length).toBe(200);
+    });
+
+    it('should limit length to custom maxLength', () => {
+      const longString = 'a'.repeat(150);
+      const result = sanitizeSearchInput(longString, 100);
+      expect(result?.length).toBe(100);
+    });
+
+    it('should return undefined for undefined input', () => {
+      const result = sanitizeSearchInput(undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for empty string', () => {
+      const result = sanitizeSearchInput('');
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for whitespace-only string', () => {
+      const result = sanitizeSearchInput('   ');
+      expect(result).toBeUndefined();
+    });
+
+    it('should preserve special characters', () => {
+      const result = sanitizeSearchInput('C++ developer');
+      expect(result).toBe('C++ developer');
+    });
+  });
+
+  describe('validateSalaryRange', () => {
+    it('should return valid for min <= max', () => {
+      const result = validateSalaryRange(50000, 80000);
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should return valid for min === max', () => {
+      const result = validateSalaryRange(50000, 50000);
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should return invalid for min > max', () => {
+      const result = validateSalaryRange(80000, 50000);
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('salaryMin must be less than or equal to salaryMax');
+    });
+
+    it('should return valid when only min is provided', () => {
+      const result = validateSalaryRange(50000, undefined);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should return valid when only max is provided', () => {
+      const result = validateSalaryRange(undefined, 80000);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should return valid when both are undefined', () => {
+      const result = validateSalaryRange(undefined, undefined);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should return valid when both are zero', () => {
+      const result = validateSalaryRange(0, 0);
+      expect(result.valid).toBe(true);
     });
   });
 });

@@ -7,7 +7,15 @@ import { validateUuidParam } from '../middleware/validate-params';
 
 const notifications = new Hono<AppContext>();
 
-// GET /notifications - List notifications with pagination
+/**
+ * GET /notifications - List notifications with pagination
+ * 
+ * Query parameters:
+ * @param page - Page number (default: 1)
+ * @param limit - Results per page (default: 20)
+ * 
+ * @returns Paginated list of notifications
+ */
 notifications.get('/', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -34,7 +42,11 @@ notifications.get('/', async (c) => {
   );
 });
 
-// GET /notifications/stream - SSE endpoint for real-time notifications
+/**
+ * GET /notifications/stream - SSE endpoint for real-time notifications
+ * 
+ * @returns Server-Sent Events stream with notifications
+ */
 notifications.get('/stream', async (c) => {
   const auth = c.get('auth');
 
@@ -73,7 +85,15 @@ notifications.get('/stream', async (c) => {
   });
 });
 
-// POST /notifications/:id/read - Mark as read
+/**
+ * POST /notifications/:id/read - Mark notification as read
+ * 
+ * @param id - Notification UUID
+ * 
+ * @returns Success message
+ * @throws 400 - If notification ID is invalid
+ * @throws 404 - If notification not found
+ */
 notifications.post('/:id/read', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -86,7 +106,11 @@ notifications.post('/:id/read', validateUuidParam('id'), async (c) => {
   );
 });
 
-// POST /notifications/read-all - Mark all as read
+/**
+ * POST /notifications/read-all - Mark all notifications as read
+ * 
+ * @returns Success message
+ */
 notifications.post('/read-all', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -98,7 +122,15 @@ notifications.post('/read-all', async (c) => {
   );
 });
 
-// DELETE /notifications/:id - Delete single notification
+/**
+ * DELETE /notifications/:id - Delete single notification
+ * 
+ * @param id - Notification UUID
+ * 
+ * @returns Success message
+ * @throws 400 - If notification ID is invalid
+ * @throws 404 - If notification not found
+ */
 notifications.delete('/:id', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -111,7 +143,11 @@ notifications.delete('/:id', validateUuidParam('id'), async (c) => {
   );
 });
 
-// DELETE /notifications - Clear all notifications
+/**
+ * DELETE /notifications - Clear all notifications
+ * 
+ * @returns Success message
+ */
 notifications.delete('/', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
@@ -123,7 +159,11 @@ notifications.delete('/', async (c) => {
   );
 });
 
-// GET /notifications/unread-count - Get unread count
+/**
+ * GET /notifications/unread-count - Get unread notification count
+ * 
+ * @returns Object with count of unread notifications
+ */
 notifications.get('/unread-count', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');

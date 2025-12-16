@@ -141,3 +141,42 @@ export function parseSalaryRange(salaryString: string | null | undefined): {
   
   return { min, max };
 }
+
+/**
+ * Sanitize search input to prevent injection attacks
+ * Trims whitespace and limits length to prevent abuse
+ * 
+ * @param input - The search input to sanitize
+ * @param maxLength - Maximum allowed length (default: 200)
+ * @returns Sanitized string or undefined if input is empty/undefined
+ * 
+ * @example
+ * sanitizeSearchInput('  software engineer  ') // Returns 'software engineer'
+ * sanitizeSearchInput('a'.repeat(300)) // Returns 'a'.repeat(200)
+ * sanitizeSearchInput(undefined) // Returns undefined
+ */
+export function sanitizeSearchInput(input: string | undefined, maxLength = 200): string | undefined {
+  if (!input) return undefined;
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, maxLength);
+}
+
+/**
+ * Validate salary range to ensure min is less than or equal to max
+ * 
+ * @param min - Minimum salary value
+ * @param max - Maximum salary value
+ * @returns Object with valid flag and optional error message
+ * 
+ * @example
+ * validateSalaryRange(50000, 80000) // Returns { valid: true }
+ * validateSalaryRange(80000, 50000) // Returns { valid: false, error: '...' }
+ * validateSalaryRange(undefined, 80000) // Returns { valid: true }
+ */
+export function validateSalaryRange(min?: number, max?: number): { valid: boolean; error?: string } {
+  if (min !== undefined && max !== undefined && min > max) {
+    return { valid: false, error: 'salaryMin must be less than or equal to salaryMax' };
+  }
+  return { valid: true };
+}
