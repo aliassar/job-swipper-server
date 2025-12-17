@@ -203,13 +203,15 @@ export const jobService = {
       and(eq(userJobStatus.userId, userId), eq(userJobStatus.jobId, jobId))
     ).limit(1);
 
+    const now = new Date();
+    
     if (existing.length > 0) {
       await dbContext
         .update(userJobStatus)
         .set({
           status,
-          decidedAt: new Date(),
-          updatedAt: new Date(),
+          decidedAt: now,
+          updatedAt: now,
         })
         .where(and(eq(userJobStatus.userId, userId), eq(userJobStatus.jobId, jobId)));
     } else {
@@ -217,7 +219,7 @@ export const jobService = {
         userId,
         jobId,
         status,
-        decidedAt: new Date(),
+        decidedAt: now,
       });
     }
 
@@ -231,7 +233,13 @@ export const jobService = {
       metadata: {},
     });
 
-    return await this.getJobWithStatus(userId, jobId);
+    // Return updated job data without refetching
+    // Construct the updated job object from what we know
+    return {
+      ...job,
+      status,
+      decidedAt: now,
+    };
   },
 
   async toggleSave(userId: string, jobId: string) {
@@ -524,10 +532,34 @@ export const jobService = {
         
         workflowRun = workflow;
 
-        // Schedule 1-minute delay timer (NOT immediate execution)
-        await timerService.scheduleAutoApplyDelay(userId, application.id);
-        
-        logger.info({ userId, jobId, applicationId: application.id, workflowRunId: workflow.id }, 'Auto-apply workflow scheduled with 1-minute delay');
+        // Schedule 1-minute delay timer with validation
+        const failureTimestamp = new Date();
+        try {
+          const timerId = await timerService.scheduleAutoApplyDelay(userId, application.id);
+          if (!timerId || timerId === '') {
+            logger.error({ userId, applicationId: application.id }, 'Failed to create auto-apply delay timer');
+            // Update workflow status to indicate scheduling failure
+            await tx
+              .update(workflowRuns)
+              .set({
+                status: 'failed',
+                currentStep: 'timer_scheduling_failed',
+                updatedAt: failureTimestamp,
+              })
+              .where(eq(workflowRuns.id, workflowRun.id));
+          } else {
+            logger.info({ 
+              userId, 
+              jobId, 
+              applicationId: application.id, 
+              workflowRunId: workflow.id,
+              timerId 
+            }, 'Auto-apply workflow scheduled with 1-minute delay');
+          }
+        } catch (timerError) {
+          logger.error({ error: timerError, userId, applicationId: application.id }, 'Exception while scheduling auto-apply timer');
+          // Don't fail the job acceptance, but log the issue
+        }
       }
 
       return {
