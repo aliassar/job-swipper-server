@@ -97,13 +97,22 @@ export const timerHandlers = {
         return;
       }
 
-      // Auto-confirm CV
+      // Auto-confirm CV - update stage explicitly
       logger.info({ applicationId }, 'Auto-confirming CV after timeout');
 
-      // Get workflow run
+      // Update application stage to Message Check
+      await db
+        .update(applications)
+        .set({
+          stage: 'Message Check',
+          lastUpdated: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(applications.id, applicationId));
+
+      // Get workflow run and continue
       const workflowRun = await workflowService.getWorkflowByApplication(applicationId);
       if (workflowRun) {
-        // Continue workflow processing
         await workflowService.processWorkflow(workflowRun.id);
       }
 

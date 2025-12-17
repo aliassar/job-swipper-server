@@ -2,6 +2,10 @@ import { db } from '../lib/db';
 import { scheduledTimers } from '../db/schema';
 import { eq, and, lte } from 'drizzle-orm';
 import { timerHandlers } from './timer-handlers.service';
+import { logger } from '../middleware/logger';
+
+// Module-level flag to prevent concurrent timer processing
+let isProcessing = false;
 
 export type TimerType =
   | 'auto_apply_delay'
@@ -197,42 +201,94 @@ export const timerService = {
    * This should be called by a cron job
    */
   async processPendingTimers(): Promise<void> {
-    const timers = await this.getPendingTimers();
+    // Prevent concurrent processing
+    if (isProcessing) {
+      logger.info('Timer processing already in progress, skipping');
+      return;
+    }
 
-    for (const timer of timers) {
-      try {
-        // Execute timer based on type
-        switch (timer.type) {
-          case 'auto_apply_delay':
-            await timerHandlers.handleAutoApplyDelay(timer);
-            break;
+    isProcessing = true;
 
-          case 'cv_verification':
-            await timerHandlers.handleCvVerificationTimeout(timer);
-            break;
+    try {
+      const timers = await this.getPendingTimers();
 
-          case 'message_verification':
-            await timerHandlers.handleMessageVerificationTimeout(timer);
-            break;
+      for (const timer of timers) {
+        try {
+          // Use transaction to atomically claim and process timer
+          await db.transaction(async (tx) => {
+            // Re-check timer hasn't been executed (claimed by another process)
+            const [currentTimer] = await tx
+              .select()
+              .from(scheduledTimers)
+              .where(
+                and(
+                  eq(scheduledTimers.id, timer.id),
+                  eq(scheduledTimers.executed, false)
+                )
+              )
+              .limit(1);
 
-          case 'doc_deletion':
-            await timerHandlers.handleDocDeletion(timer);
-            break;
+            if (!currentTimer) {
+              logger.info({ timerId: timer.id }, 'Timer already processed by another instance');
+              return;
+            }
 
-          case 'follow_up_reminder':
-            await timerHandlers.handleFollowUpReminder(timer);
-            break;
+            // Mark as executed FIRST to prevent double-processing
+            await tx
+              .update(scheduledTimers)
+              .set({ executed: true, executedAt: new Date() })
+              .where(eq(scheduledTimers.id, timer.id));
+          });
 
-          default:
-            console.log(`Unknown timer type: ${timer.type}`);
+          // Process timer AFTER marking as executed
+          // If processing fails, timer is still marked executed to prevent infinite retries
+          // A separate failed_timers table could track failures for manual review
+          await this.executeTimer(timer);
+
+        } catch (error) {
+          logger.error({ error, timerId: timer.id }, 'Error processing timer');
         }
-
-        // Mark as executed
-        await this.markTimerExecuted(timer.id);
-      } catch (error) {
-        console.error(`Error processing timer ${timer.id}:`, error);
-        // Don't mark as executed if it fails - will retry on next run
       }
+    } finally {
+      isProcessing = false;
+    }
+  },
+
+  /**
+   * Execute timer based on type
+   * Extracted to separate method for better organization
+   */
+  async executeTimer(timer: {
+    id: string;
+    userId: string;
+    type: TimerType;
+    targetId: string;
+    executeAt: Date;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    switch (timer.type) {
+      case 'auto_apply_delay':
+        await timerHandlers.handleAutoApplyDelay(timer);
+        break;
+
+      case 'cv_verification':
+        await timerHandlers.handleCvVerificationTimeout(timer);
+        break;
+
+      case 'message_verification':
+        await timerHandlers.handleMessageVerificationTimeout(timer);
+        break;
+
+      case 'doc_deletion':
+        await timerHandlers.handleDocDeletion(timer);
+        break;
+
+      case 'follow_up_reminder':
+        await timerHandlers.handleFollowUpReminder(timer);
+        break;
+
+      default:
+        logger.warn({ timerType: timer.type }, 'Unknown timer type');
     }
   },
 };
