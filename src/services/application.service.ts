@@ -6,6 +6,7 @@ import { logger } from '../middleware/logger';
 import { storage } from '../lib/storage';
 import { timerService } from './timer.service';
 import PDFDocument from 'pdfkit';
+import { escapeLikePattern } from '../lib/utils';
 
 export const applicationService = {
   async getApplications(userId: string, page: number = 1, limit: number = 20, search?: string) {
@@ -14,11 +15,12 @@ export const applicationService = {
     let whereConditions: SQL<unknown> | undefined = eq(applications.userId, userId);
     
     if (search) {
+      const escapedSearch = escapeLikePattern(search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${search}%`),
-          like(jobs.position, `%${search}%`)
+          like(jobs.company, `%${escapedSearch}%`),
+          like(jobs.position, `%${escapedSearch}%`)
         )
       );
     }
@@ -45,12 +47,13 @@ export const applicationService = {
     let countWhereConditions: SQL<unknown> | undefined = eq(applications.userId, userId);
     
     if (search) {
+      const escapedSearch = escapeLikePattern(search);
       countWhereConditions = and(
         countWhereConditions,
         sql`EXISTS (
           SELECT 1 FROM ${jobs} 
           WHERE ${jobs.id} = ${applications.jobId} 
-          AND (${like(jobs.company, `%${search}%`)} OR ${like(jobs.position, `%${search}%`)})
+          AND (${like(jobs.company, `%${escapedSearch}%`)} OR ${like(jobs.position, `%${escapedSearch}%`)})
         )`
       );
     }
@@ -450,11 +453,12 @@ export const applicationService = {
 
     // Add search filter
     if (options.search) {
+      const escapedSearch = escapeLikePattern(options.search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${options.search}%`),
-          like(jobs.position, `%${options.search}%`)
+          like(jobs.company, `%${escapedSearch}%`),
+          like(jobs.position, `%${escapedSearch}%`)
         )
       );
     }
