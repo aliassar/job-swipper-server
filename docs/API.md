@@ -2,6 +2,9 @@
 
 Complete API reference with request/response examples for all endpoints.
 
+## Base URL
+The API base URL is configured via `NEXT_PUBLIC_API_URL` environment variable.
+
 ## Table of Contents
 
 - [Authentication](#authentication)
@@ -27,6 +30,12 @@ Complete API reference with request/response examples for all endpoints.
 ---
 
 ## Authentication
+
+All endpoints (except `/api/auth/*`) require a Bearer token in the Authorization header:
+
+```
+Authorization: Bearer <jwt_token>
+```
 
 Most endpoints require authentication via JWT (JSON Web Token). There are several ways to authenticate:
 

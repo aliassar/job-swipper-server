@@ -6,6 +6,7 @@ import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
 import { jobFilterClient } from '../lib/microservice-client';
 import type { JobFilterRequest, JobFilterResponse, FilterType } from '../lib/microservices';
+import type { JobWithStatus } from '../types';
 import PDFDocument from 'pdfkit';
 import { escapeLikePattern } from '../lib/utils';
 
@@ -15,6 +16,17 @@ function isDatabaseError(error: unknown): error is { code?: string; constraint?:
 }
 
 export const jobService = {
+  /**
+   * Get pending jobs for a user with optional filters
+   * @param userId - The user's UUID
+   * @param search - Optional search term for company/position
+   * @param limit - Maximum number of jobs to return (default: 10)
+   * @param location - Optional location filter
+   * @param salaryMin - Optional minimum salary filter
+   * @param salaryMax - Optional maximum salary filter
+   * @returns Promise containing jobs array and total count
+   * @throws {ValidationError} If salary range is invalid
+   */
   async getPendingJobs(
     userId: string,
     search?: string,
@@ -22,7 +34,7 @@ export const jobService = {
     location?: string,
     salaryMin?: number,
     salaryMax?: number
-  ) {
+  ): Promise<{ jobs: JobWithStatus[]; total: number }> {
     // Get blocked companies
     const blocked = await db
       .select({ companyName: blockedCompanies.companyName })
@@ -407,6 +419,15 @@ export const jobService = {
     };
   },
 
+  /**
+   * Accept a job and create an application
+   * @param userId - The user's UUID
+   * @param jobId - The job's UUID
+   * @param _requestId - Optional request ID for tracing
+   * @param metadata - Optional metadata including automaticApply flag
+   * @returns Promise containing job, application, and workflow run (if auto-apply enabled)
+   * @throws {NotFoundError} If job doesn't exist
+   */
   async acceptJob(userId: string, jobId: string, _requestId?: string, metadata?: { automaticApply?: boolean }) {
     // Use a transaction for atomicity
     return await db.transaction(async (tx) => {
