@@ -267,10 +267,8 @@ export const workflowService = {
             .set({ generatedCoverLetterId: generatedCoverLetter.id })
             .where(eq(applications.id, app.id));
 
-          // Update stage to Message Check if not already there
-          if (app.stage !== 'CV Check') {
-            await applicationService.updateApplicationStage(userId, app.id, 'Message Check');
-          }
+          // Update stage to Message Check
+          await applicationService.updateApplicationStage(userId, app.id, 'Message Check');
 
           // Notify user
           await notificationService.createNotification(
