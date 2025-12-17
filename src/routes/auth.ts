@@ -303,9 +303,19 @@ auth.post('/refresh', async (c) => {
   
   const token = authHeader.substring(7);
   
+  // Ensure JWT_SECRET is configured
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    logger.error('JWT_SECRET environment variable is not configured');
+    return c.json(formatResponse(false, null, {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Token refresh failed',
+    }, requestId), 500);
+  }
+  
   try {
     // Verify the existing token (this will fail if completely expired)
-    const payload = await verify(token, process.env.JWT_SECRET!);
+    const payload = await verify(token, jwtSecret);
     
     if (!payload || !payload.userId) {
       return c.json(formatResponse(false, null, {
@@ -336,9 +346,10 @@ auth.post('/refresh', async (c) => {
       {
         userId: payload.userId,
         email: user[0].email,
+        emailVerified: user[0].emailVerified,
         exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
       },
-      process.env.JWT_SECRET!
+      jwtSecret
     );
     
     logger.info({ userId: payload.userId }, 'Token refreshed');
