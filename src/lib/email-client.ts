@@ -38,7 +38,7 @@ class EmailClient {
   async sendEmail(options: EmailOptions): Promise<void> {
     if (!this.transporter) {
       logger.warn({ to: options.to, subject: options.subject }, 'Email not sent - transporter not configured');
-      return;
+      throw new Error('Email transport not configured (email not sent)');
     }
 
     try {
@@ -74,7 +74,8 @@ class EmailClient {
   }
 
   async sendVerificationEmail(email: string, token: string): Promise<void> {
-    const verificationUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}`;
+    const baseUrl = process.env.FRONTEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
     
     await this.sendEmail({
       to: email,
@@ -97,7 +98,8 @@ class EmailClient {
   }
 
   async sendPasswordResetEmail(email: string, token: string, requestId?: string): Promise<void> {
-    const resetUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/reset-password?token=${token}`;
+    const baseUrl = process.env.FRONTEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
     
     await this.sendEmail({
       to: email,
