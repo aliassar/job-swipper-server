@@ -1,5 +1,7 @@
 import { Context } from 'hono';
 
+export * from './shared';
+
 export interface AuthContext {
   userId: string;
   sessionToken: string;
