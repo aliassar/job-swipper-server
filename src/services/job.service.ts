@@ -578,8 +578,9 @@ export const jobService = {
   /**
    * Block a company
    */
-  async blockCompany(userId: string, companyName: string, reason?: string) {
-    const [blocked] = await db
+  async blockCompany(userId: string, companyName: string, reason?: string, tx?: any) {
+    const dbContext = tx || db;
+    const [blocked] = await dbContext
       .insert(blockedCompanies)
       .values({
         userId,
@@ -642,7 +643,7 @@ export const jobService = {
 
       // If reason is 'dont_recommend_company', auto-block the company
       if (reason === 'dont_recommend_company') {
-        await this.blockCompany(userId, job.company, 'Reported via dont_recommend_company');
+        await this.blockCompany(userId, job.company, 'Reported via dont_recommend_company', tx);
       }
 
       // Notify filtering microservice based on reason
@@ -783,7 +784,14 @@ export const jobService = {
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row) => row.map((cell) => {
+        let escaped = String(cell)
+          .replace(/"/g, '""')           // Escape double quotes
+          .replace(/\r\n/g, ' ')         // Replace Windows newlines with space
+          .replace(/\n/g, ' ')           // Replace Unix newlines with space
+          .replace(/\r/g, ' ');          // Replace old Mac newlines with space
+        return `"${escaped}"`;
+      }).join(',')),
     ].join('\n');
 
     return csvContent;

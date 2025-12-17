@@ -531,7 +531,14 @@ export const applicationService = {
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row) => row.map((cell) => {
+        let escaped = String(cell)
+          .replace(/"/g, '""')           // Escape double quotes
+          .replace(/\r\n/g, ' ')         // Replace Windows newlines with space
+          .replace(/\n/g, ' ')           // Replace Unix newlines with space
+          .replace(/\r/g, ' ');          // Replace old Mac newlines with space
+        return `"${escaped}"`;
+      }).join(',')),
     ].join('\n');
 
     return csvContent;
