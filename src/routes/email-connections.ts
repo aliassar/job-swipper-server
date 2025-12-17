@@ -215,10 +215,6 @@ emailConnections.post('/:id/sync', validateUuidParam('id'), async (c) => {
     // Get the email connection
     const connection = await emailConnectionService.getConnection(auth.userId, connectionId);
     
-    if (!connection) {
-      throw new NotFoundError('Email connection');
-    }
-    
     // Sync to stage updater microservice if configured
     if (process.env.STAGE_UPDATER_SERVICE_URL) {
       const syncResult = await emailConnectionService.syncToStageUpdater(connection);
