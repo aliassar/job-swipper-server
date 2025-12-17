@@ -503,9 +503,10 @@ export const jobService = {
         workflowRun = workflow;
 
         // Schedule 1-minute delay timer with validation
+        const failureTimestamp = new Date();
         try {
           const timerId = await timerService.scheduleAutoApplyDelay(userId, application.id);
-          if (!timerId) {
+          if (!timerId || timerId === '') {
             logger.error({ userId, applicationId: application.id }, 'Failed to create auto-apply delay timer');
             // Update workflow status to indicate scheduling failure
             await tx
@@ -513,7 +514,7 @@ export const jobService = {
               .set({
                 status: 'failed',
                 currentStep: 'timer_scheduling_failed',
-                updatedAt: new Date(),
+                updatedAt: failureTimestamp,
               })
               .where(eq(workflowRuns.id, workflowRun.id));
           } else {
