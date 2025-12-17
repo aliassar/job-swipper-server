@@ -9,6 +9,11 @@ import type { JobFilterRequest, JobFilterResponse, FilterType } from '../lib/mic
 import PDFDocument from 'pdfkit';
 import { escapeLikePattern } from '../lib/utils';
 
+// Type guard for database errors
+function isDatabaseError(error: unknown): error is { code?: string; constraint?: string } {
+  return typeof error === 'object' && error !== null && ('code' in error || 'constraint' in error);
+}
+
 export const jobService = {
   async getPendingJobs(
     userId: string,
@@ -87,12 +92,40 @@ export const jobService = {
 
     const results = await query.orderBy(desc(jobs.createdAt)).limit(limit);
 
-    // Get total count of remaining jobs
-    const countQuery = db
+    // Get total count of remaining jobs with the same filters
+    let countQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(jobs)
       .leftJoin(userJobStatus, and(eq(userJobStatus.jobId, jobs.id), eq(userJobStatus.userId, userId)))
-      .where(sql`(${userJobStatus.status} IS NULL OR ${userJobStatus.status} = 'pending')`);
+      .where(sql`(${userJobStatus.status} IS NULL OR ${userJobStatus.status} = 'pending')`)
+      .$dynamic();
+
+    // Apply the same filters to count query
+    if (blockedCompanyNames.length > 0) {
+      countQuery = countQuery.where(not(inArray(jobs.company, blockedCompanyNames)));
+    }
+
+    if (search) {
+      const escapedSearch = escapeLikePattern(search);
+      countQuery = countQuery.where(
+        or(
+          like(jobs.company, `%${escapedSearch}%`),
+          like(jobs.position, `%${escapedSearch}%`)
+        )
+      );
+    }
+
+    if (location) {
+      const escapedLocation = escapeLikePattern(location);
+      countQuery = countQuery.where(like(jobs.location, `%${escapedLocation}%`));
+    }
+
+    if (salaryMin !== undefined) {
+      countQuery = countQuery.where(sql`${jobs.salaryMax} >= ${salaryMin}`);
+    }
+    if (salaryMax !== undefined) {
+      countQuery = countQuery.where(sql`${jobs.salaryMin} <= ${salaryMax}`);
+    }
 
     const totalResult = await countQuery;
     const total = Number(totalResult[0]?.count || 0);
@@ -138,17 +171,19 @@ export const jobService = {
     userId: string,
     jobId: string,
     status: 'pending' | 'accepted' | 'rejected' | 'skipped',
-    actionType: 'accepted' | 'rejected' | 'skipped' | 'saved' | 'unsaved' | 'rollback' | 'report' | 'unreport'
+    actionType: 'accepted' | 'rejected' | 'skipped' | 'saved' | 'unsaved' | 'rollback' | 'report' | 'unreport',
+    tx?: any // Transaction context when called within a transaction
   ) {
+    const dbContext = tx || db;
     const job = await this.getJobWithStatus(userId, jobId);
 
     // Update or insert user job status
-    const existing = await db.select().from(userJobStatus).where(
+    const existing = await dbContext.select().from(userJobStatus).where(
       and(eq(userJobStatus.userId, userId), eq(userJobStatus.jobId, jobId))
     ).limit(1);
 
     if (existing.length > 0) {
-      await db
+      await dbContext
         .update(userJobStatus)
         .set({
           status,
@@ -157,7 +192,7 @@ export const jobService = {
         })
         .where(and(eq(userJobStatus.userId, userId), eq(userJobStatus.jobId, jobId)));
     } else {
-      await db.insert(userJobStatus).values({
+      await dbContext.insert(userJobStatus).values({
         userId,
         jobId,
         status,
@@ -166,7 +201,7 @@ export const jobService = {
     }
 
     // Record action history
-    await db.insert(actionHistory).values({
+    await dbContext.insert(actionHistory).values({
       userId,
       jobId,
       actionType: actionType,
@@ -415,9 +450,21 @@ export const jobService = {
             })
             .returning();
           application = newApp;
-        } catch (error) {
-          logger.error({ error, userId, jobId }, 'Failed to create application during job acceptance');
-          return { job, application: null, workflow: null };
+        } catch (error: unknown) {
+          // Check if it's a unique constraint violation (duplicate application)
+          if (isDatabaseError(error) && (error.code === '23505' || error.constraint === 'applications_user_id_job_id_unique')) {
+            logger.warn({ userId, jobId }, 'Application already exists for this user and job (race condition prevented)');
+            // Fetch the existing application that was created by the concurrent request
+            const [existingApp] = await tx
+              .select()
+              .from(applications)
+              .where(and(eq(applications.userId, userId), eq(applications.jobId, jobId)))
+              .limit(1);
+            application = existingApp;
+          } else {
+            logger.error({ error, userId, jobId }, 'Failed to create application during job acceptance');
+            return { job, application: null, workflow: null };
+          }
         }
       }
 
@@ -516,8 +563,8 @@ export const jobService = {
 
       logger.info({ userId, jobId, applicationId: app.id }, 'Application deleted during rollback');
 
-      // Update job status back to pending
-      const job = await this.updateJobStatus(userId, jobId, 'pending', 'rollback');
+      // Update job status back to pending (using transaction)
+      const job = await this.updateJobStatus(userId, jobId, 'pending', 'rollback', tx);
 
       logger.info({ userId, jobId, applicationId: app.id }, 'Job rolled back');
 

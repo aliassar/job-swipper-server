@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, timestamp, boolean, integer, jsonb, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, timestamp, boolean, integer, jsonb, uuid, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Enums
 export const userJobStatusEnum = pgEnum('user_job_status_enum', ['pending', 'accepted', 'rejected', 'skipped']);
@@ -260,7 +260,10 @@ export const applications = pgTable('applications', {
   lastUpdated: timestamp('last_updated').notNull().defaultNow(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate applications for the same user and job
+  uniqueUserJob: uniqueIndex('applications_user_id_job_id_unique').on(table.userId, table.jobId),
+}));
 
 // Workflow runs table for tracking application workflow state
 export const workflowRuns = pgTable('workflow_runs', {

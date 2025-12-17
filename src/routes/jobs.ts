@@ -5,6 +5,7 @@ import { jobService } from '../services/job.service';
 import { formatResponse, parseIntSafe, sanitizeSearchInput, validateSalaryRange } from '../lib/utils';
 import { ValidationError } from '../lib/errors';
 import { validateUuidParam } from '../middleware/validate-params';
+import { logger } from '../middleware/logger';
 
 const jobs = new Hono<AppContext>();
 
@@ -126,6 +127,10 @@ jobs.post('/:id/accept', validateUuidParam('id'), async (c) => {
     // If body is empty or invalid JSON, metadata remains undefined
     if (error instanceof ValidationError) {
       throw error;
+    }
+    // Log JSON parse errors for debugging
+    if (error instanceof SyntaxError) {
+      logger.debug({ error: error.message, jobId, userId: auth.userId }, 'Malformed JSON in accept job request body');
     }
     // For empty body or JSON parse errors, use undefined metadata
     metadata = undefined;

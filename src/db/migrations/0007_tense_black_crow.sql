@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "applications_user_id_job_id_unique" ON "applications" USING btree ("user_id","job_id");
