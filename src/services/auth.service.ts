@@ -88,41 +88,55 @@ export const authService = {
     // Hash password
     const passwordHash = await this.hashPassword(password);
 
-    // Create user
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        email,
-        passwordHash,
-        emailVerified: false,
-        oauthProvider: 'email',
-      })
-      .returning();
+    console.log('Attempting to create user in DB:', email);
 
-    // Generate email verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
+    try {
+      // Create user
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          email,
+          passwordHash,
+          emailVerified: false,
+          oauthProvider: 'email',
+        })
+        .returning();
 
-    await db.insert(emailVerificationTokens).values({
-      userId: newUser.id,
-      token: verificationToken,
-      expiresAt,
-      used: false,
-    });
+      console.log('User created:', newUser.id);
 
-    // Send verification email
-    await emailClient.sendVerificationEmail(email, verificationToken);
+      // Generate email verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
 
-    const user: AuthUser = {
-      id: newUser.id,
-      email: newUser.email,
-      emailVerified: newUser.emailVerified,
-    };
+      await db.insert(emailVerificationTokens).values({
+        userId: newUser.id,
+        token: verificationToken,
+        expiresAt,
+        used: false,
+      });
 
-    const token = this.generateToken(user);
+      // Send verification email (don't fail registration if email fails)
+      try {
+        await emailClient.sendVerificationEmail(email, verificationToken);
+      } catch (error) {
+        console.error('Failed to send verification email:', error);
+        // Continue with registration - user can resend verification later
+      }
 
-    return { user, token };
+      const user: AuthUser = {
+        id: newUser.id,
+        email: newUser.email,
+        emailVerified: newUser.emailVerified,
+      };
+
+      const token = this.generateToken(user);
+
+      return { user, token };
+    } catch (error) {
+      console.error('Error during user registration:', error);
+      throw error;
+    }
   },
 
   /**

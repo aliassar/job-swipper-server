@@ -53,23 +53,28 @@ auth.post('/register', async (c) => {
     throw new ValidationError('Invalid request body', validated.error.errors);
   }
 
-  const { user, token } = await authService.register(
-    validated.data.email,
-    validated.data.password
-  );
+  try {
+    const { user, token } = await authService.register(
+      validated.data.email,
+      validated.data.password
+    );
 
-  return c.json(
-    formatResponse(
-      true,
-      {
-        user,
-        token,
-        message: 'Registration successful. Please check your email to verify your account.',
-      },
-      null,
-      requestId
-    )
-  );
+    return c.json(
+      formatResponse(
+        true,
+        {
+          user,
+          token,
+          message: 'Registration successful. Please check your email to verify your account.',
+        },
+        null,
+        requestId
+      )
+    );
+  } catch (error) {
+    logger.error({ error, requestId }, 'Registration failed in route handler');
+    throw error;
+  }
 });
 
 // POST /auth/login - Email/password login
@@ -232,6 +237,7 @@ auth.get('/github/callback', async (c) => {
   }
 });
 
+/*
 // GET /auth/yahoo - Yahoo OAuth initiation
 auth.get('/yahoo', async (c) => {
   const clientId = process.env.YAHOO_CLIENT_ID;
@@ -303,6 +309,7 @@ auth.get('/microsoft/callback', async (c) => {
     return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
   }
 });
+*/
 
 // POST /auth/logout - Logout (client-side token removal)
 auth.post('/logout', async (c) => {
@@ -440,7 +447,7 @@ auth.post('/refresh', async (c) => {
 
 // POST /auth/exchange - Exchange provider token for app token
 const exchangeSchema = z.object({
-  provider: z.enum(['google', 'github', 'yahoo', 'microsoft']),
+  provider: z.enum(['google', 'github']),
   token: z.string(),
 });
 

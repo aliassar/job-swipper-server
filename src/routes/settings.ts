@@ -19,6 +19,18 @@ const updateSettingsSchema = z.object({
   autoGenerateCoverLetter: z.boolean().optional(),
   autoGenerateEmail: z.boolean().optional(),
   aiFilteringEnabled: z.boolean().optional(),
+  autoApplyEnabled: z.boolean().optional(),
+  writeResumeAndCoverLetter: z.boolean().optional(),
+  applyForMeEnabled: z.boolean().optional(),
+  verifyResumeAndCoverLetter: z.boolean().optional(),
+  updateStatusForMe: z.boolean().optional(),
+  filterOutFakeJobs: z.boolean().optional(),
+  followUpReminderEnabled: z.boolean().optional(),
+  followUpIntervalDays: z.number().min(1).max(90).optional(),
+  autoFollowUpEnabled: z.boolean().optional(),
+  baseResumeId: z.string().uuid().nullable().optional(),
+  baseCoverLetterId: z.string().uuid().nullable().optional(),
+  baseCoverLetterUrl: z.string().nullable().optional(),
 });
 
 // GET /api/settings - Get user settings
