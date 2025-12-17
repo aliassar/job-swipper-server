@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { AppContext } from '../types';
 import { emailConnectionService } from '../services/email-connection.service';
 import { formatResponse } from '../lib/utils';
-import { ValidationError } from '../lib/errors';
+import { ValidationError, NotFoundError } from '../lib/errors';
+import { validateUuidParam } from '../middleware/validate-params';
+import { logger } from '../middleware/logger';
 
 const emailConnections = new Hono<AppContext>();
 
@@ -192,19 +194,55 @@ emailConnections.post('/:id/test', async (c) => {
   return c.json(formatResponse(true, { valid: isValid }, null, requestId));
 });
 
-// POST /api/email-connections/:id/sync - Manually send credentials to Stage Updater
-emailConnections.post('/:id/sync', async (c) => {
+/**
+ * POST /api/email-connections/:id/sync - Sync email connection to stage updater
+ * 
+ * @param id - Email connection UUID
+ * 
+ * Syncs the email credentials to the stage updater microservice
+ * so it can monitor emails for application status updates.
+ * 
+ * @returns Success message with sync status
+ * @throws 400 - If connection ID is invalid
+ * @throws 404 - If connection not found
+ */
+emailConnections.post('/:id/sync', validateUuidParam('id'), async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const connectionId = c.req.param('id');
 
-  const result = await emailConnectionService.syncCredentialsToStageUpdater(
-    auth.userId,
-    connectionId,
-    requestId
-  );
-
-  return c.json(formatResponse(true, result, null, requestId));
+  try {
+    // Get the email connection
+    const connection = await emailConnectionService.getConnection(auth.userId, connectionId);
+    
+    // Sync to stage updater microservice if configured
+    if (process.env.STAGE_UPDATER_SERVICE_URL) {
+      const syncResult = await emailConnectionService.syncToStageUpdater(connection);
+      
+      logger.info({ 
+        userId: auth.userId, 
+        connectionId, 
+        provider: connection.provider 
+      }, 'Email connection synced to stage updater');
+      
+      return c.json(formatResponse(true, { 
+        message: 'Email connection synced successfully',
+        synced: true,
+        syncedAt: new Date().toISOString(),
+      }, null, requestId));
+    } else {
+      // Stage updater not configured - return success but indicate not synced
+      logger.warn({ connectionId }, 'Stage updater service not configured');
+      
+      return c.json(formatResponse(true, { 
+        message: 'Sync skipped - stage updater service not configured',
+        synced: false,
+      }, null, requestId));
+    }
+  } catch (error) {
+    logger.error({ error, connectionId }, 'Failed to sync email connection');
+    throw error;
+  }
 });
 
 export default emailConnections;

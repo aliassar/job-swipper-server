@@ -1040,4 +1040,66 @@ export const emailConnectionService = {
       message: 'Credentials successfully sent to Stage Updater',
     };
   },
+
+  /**
+   * Sync email connection credentials to the stage updater microservice
+   * @param connection - The email connection to sync
+   * @returns Sync result
+   */
+  async syncToStageUpdater(connection: any): Promise<{ success: boolean }> {
+    const stageUpdaterUrl = process.env.STAGE_UPDATER_SERVICE_URL;
+    
+    if (!stageUpdaterUrl) {
+      throw new Error('Stage updater service URL not configured');
+    }
+    
+    // Decrypt credentials before sending
+    let decryptedCredentials: any = {};
+    
+    if (connection.provider === 'imap') {
+      // Decrypt IMAP password
+      decryptedCredentials = decryptCredentials({
+        encryptedImapPassword: connection.encryptedImapPassword,
+        encryptionIv: connection.encryptionIv,
+      });
+    } else {
+      // Decrypt OAuth tokens for Gmail/Outlook/Yahoo
+      decryptedCredentials = decryptCredentials({
+        encryptedAccessToken: connection.encryptedAccessToken,
+        encryptedRefreshToken: connection.encryptedRefreshToken,
+        encryptionIv: connection.encryptionIv,
+      });
+    }
+    
+    const response = await fetch(`${stageUpdaterUrl}/api/credentials/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Service-Key': process.env.STAGE_UPDATER_API_KEY || '',
+      },
+      body: JSON.stringify({
+        userId: connection.userId,
+        connectionId: connection.id,
+        provider: connection.provider,
+        email: connection.email,
+        // Only send what's needed for email monitoring
+        credentials: {
+          accessToken: decryptedCredentials.accessToken,
+          refreshToken: decryptedCredentials.refreshToken,
+          // For IMAP
+          imapHost: connection.imapHost,
+          imapPort: connection.imapPort,
+          imapUsername: connection.imapUsername,
+          imapPassword: decryptedCredentials.imapPassword,
+        },
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Stage updater sync failed: ${error}`);
+    }
+    
+    return { success: true };
+  },
 };
