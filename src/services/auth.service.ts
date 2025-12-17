@@ -272,7 +272,7 @@ export const authService = {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID || '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
+        redirect_uri: `${process.env.API_URL || 'http://localhost:5000'}/api/auth/google/callback`,
         grant_type: 'authorization_code',
       }),
     });
@@ -362,7 +362,7 @@ export const authService = {
         client_id: process.env.GITHUB_CLIENT_ID || '',
         client_secret: process.env.GITHUB_CLIENT_SECRET || '',
         code,
-        redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/github`,
+        redirect_uri: `${process.env.API_URL || 'http://localhost:5000'}/api/auth/github/callback`,
       }),
     });
 
@@ -410,7 +410,7 @@ export const authService = {
 
     const emails = await emailsResponse.json() as Array<Record<string, unknown>>;
     const primaryEmail = emails.find((e) => e.primary === true && e.verified === true);
-    
+
     if (!primaryEmail || !primaryEmail.email) {
       throw new AuthenticationError('No verified primary email found in GitHub account');
     }
@@ -457,5 +457,239 @@ export const authService = {
     const jwtToken = this.generateToken(authUser);
 
     return { user: authUser, token: jwtToken };
+  },
+  /**
+   * Exchange an OAuth access token for an app JWT
+   * Used when the frontend (NextAuth) handles the OAuth flow
+   */
+  async exchangeOAuthToken(provider: 'google' | 'github' | 'yahoo' | 'microsoft', accessToken: string): Promise<{ user: AuthUser; token: string }> {
+    let email: string;
+    let oauthId: string;
+
+    if (provider === 'google') {
+      // Verify Google token and get user info
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new AuthenticationError('Failed to verify Google access token');
+      }
+
+      const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+      email = userInfo.email as string;
+      oauthId = userInfo.id as string;
+    } else if (provider === 'github') {
+      // Verify GitHub token and get user info
+      const userInfoResponse = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new AuthenticationError('Failed to verify GitHub access token');
+      }
+
+      const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+      oauthId = String(userInfo.id);
+
+      // Get primary email
+      const emailsResponse = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!emailsResponse.ok) {
+        throw new AuthenticationError('Failed to get email from GitHub');
+      }
+
+      const emails = await emailsResponse.json() as Array<Record<string, unknown>>;
+      const primaryEmail = emails.find((e) => e.primary === true && e.verified === true);
+
+      if (!primaryEmail || !primaryEmail.email) {
+        throw new AuthenticationError('No verified primary email found in GitHub account');
+      }
+
+      email = primaryEmail.email as string;
+    } else if (provider === 'yahoo') {
+      const userInfoResponse = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new AuthenticationError('Failed to verify Yahoo access token');
+      }
+
+      const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+      email = userInfo.email as string;
+      oauthId = userInfo.sub as string;
+    } else if (provider === 'microsoft') {
+      const userInfoResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new AuthenticationError('Failed to verify Microsoft access token');
+      }
+
+      const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+      email = (userInfo.mail || userInfo.userPrincipalName) as string;
+      oauthId = userInfo.id as string;
+    } else {
+      throw new ValidationError('Unsupported provider');
+    }
+
+    if (!email || !oauthId) {
+      throw new AuthenticationError(`Invalid user info received from ${provider}`);
+    }
+
+    return this.handleOAuthUser(email, provider, oauthId);
+  },
+
+  /**
+   * OAuth token exchange for Yahoo
+   */
+  async yahooOAuthCallback(code: string): Promise<{ user: AuthUser; token: string }> {
+    const tokenResponse = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.YAHOO_CLIENT_ID}:${process.env.YAHOO_CLIENT_SECRET}`).toString('base64'),
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: `${process.env.API_URL || 'http://localhost:5000'}/api/auth/yahoo/callback`,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      throw new AuthenticationError(`Failed to exchange Yahoo OAuth code: ${errText}`);
+    }
+
+    const tokenData = await tokenResponse.json() as Record<string, unknown>;
+    const accessToken = tokenData.access_token as string;
+
+    if (!accessToken) {
+      throw new AuthenticationError('No access token received from Yahoo');
+    }
+
+    const userInfoResponse = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userInfoResponse.ok) {
+      throw new AuthenticationError('Failed to get user info from Yahoo');
+    }
+
+    const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+    const email = userInfo.email as string;
+    const oauthId = userInfo.sub as string;
+
+    if (!email || !oauthId) {
+      throw new AuthenticationError('Invalid user info received from Yahoo');
+    }
+
+    return this.handleOAuthUser(email, 'yahoo', oauthId);
+  },
+
+  /**
+   * OAuth token exchange for Microsoft (Outlook)
+   */
+  async microsoftOAuthCallback(code: string): Promise<{ user: AuthUser; token: string }> {
+    const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.MICROSOFT_CLIENT_ID || '',
+        scope: 'user.read mail.read',
+        code,
+        redirect_uri: `${process.env.API_URL || 'http://localhost:5000'}/api/auth/microsoft/callback`,
+        grant_type: 'authorization_code',
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET || '',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      throw new AuthenticationError(`Failed to exchange Microsoft OAuth code: ${errText}`);
+    }
+
+    const tokenData = await tokenResponse.json() as Record<string, unknown>;
+    const accessToken = tokenData.access_token as string;
+
+    if (!accessToken) {
+      throw new AuthenticationError('No access token received from Microsoft');
+    }
+
+    const userInfoResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userInfoResponse.ok) {
+      throw new AuthenticationError('Failed to get user info from Microsoft');
+    }
+
+    const userInfo = await userInfoResponse.json() as Record<string, unknown>;
+    const email = (userInfo.mail || userInfo.userPrincipalName) as string;
+    const oauthId = userInfo.id as string;
+
+    if (!email || !oauthId) {
+      throw new AuthenticationError('Invalid user info received from Microsoft');
+    }
+
+    return this.handleOAuthUser(email, 'microsoft', oauthId);
+  },
+
+  /**
+   * Helper to handle finding/creating user from OAuth info
+   */
+  async handleOAuthUser(email: string, provider: 'google' | 'github' | 'yahoo' | 'microsoft', oauthId: string): Promise<{ user: AuthUser; token: string }> {
+    // Find or create user in database
+    let [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!user) {
+      // Create new user
+      [user] = await db
+        .insert(users)
+        .values({
+          email,
+          oauthProvider: provider,
+          oauthId,
+          emailVerified: true,
+        })
+        .returning();
+    } else if (user.oauthProvider !== provider) {
+      // Update existing user to link provider
+      await db
+        .update(users)
+        .set({
+          oauthProvider: provider,
+          oauthId,
+          emailVerified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    }
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      emailVerified: true,
+    };
+
+    const token = this.generateToken(authUser);
+    return { user: authUser, token };
   },
 };

@@ -28,7 +28,7 @@ export const actionTypeEnum = pgEnum('action_type_enum', [
   'unreport',
   'stage_updated',
 ]);
-export const oauthProviderEnum = pgEnum('oauth_provider_enum', ['google', 'github', 'email']);
+export const oauthProviderEnum = pgEnum('oauth_provider_enum', ['google', 'github', 'email', 'yahoo', 'microsoft']);
 export const notificationTypeEnum = pgEnum('notification_type_enum', [
   'cv_ready',
   'message_ready',

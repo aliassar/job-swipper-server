@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { AppContext } from './types';
@@ -48,7 +49,7 @@ app.onError(errorHandler);
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const { serve } = await import('@hono/node-server');
   const port = parseInt(process.env.PORT || '5000', 10);
-  
+
   console.log(`🚀 Server starting on http://localhost:${port}`);
   serve({
     fetch: app.fetch,

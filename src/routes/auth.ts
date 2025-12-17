@@ -39,6 +39,8 @@ const resetPasswordSchema = z.object({
 
 // Helper function to get frontend URL
 const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
+// Helper function to get server URL (for OAuth callbacks)
+const getServerUrl = () => process.env.API_URL || 'http://localhost:5000';
 
 // POST /auth/register - Email/password signup
 auth.post('/register', async (c) => {
@@ -161,7 +163,7 @@ auth.post('/reset-password', async (c) => {
 // GET /auth/google - Google OAuth initiation
 auth.get('/google', async (c) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = `${process.env.NEXTAUTH_URL}/auth/google/callback`;
+  const redirectUri = `${getServerUrl()}/api/auth/google/callback`;
 
   if (!clientId) {
     throw new Error('Google OAuth not configured');
@@ -190,14 +192,14 @@ auth.get('/google/callback', async (c) => {
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
-    return c.redirect(`${frontendUrl}/auth/error?message=${errorMessage}`);
+    return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
   }
 });
 
 // GET /auth/github - GitHub OAuth initiation
 auth.get('/github', async (c) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
-  const redirectUri = `${process.env.NEXTAUTH_URL}/auth/github/callback`;
+  const redirectUri = `${getServerUrl()}/api/auth/github/callback`;
 
   if (!clientId) {
     throw new Error('GitHub OAuth not configured');
@@ -226,7 +228,79 @@ auth.get('/github/callback', async (c) => {
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
-    return c.redirect(`${frontendUrl}/auth/error?message=${errorMessage}`);
+    return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
+  }
+});
+
+// GET /auth/yahoo - Yahoo OAuth initiation
+auth.get('/yahoo', async (c) => {
+  const clientId = process.env.YAHOO_CLIENT_ID;
+  const redirectUri = `${getServerUrl()}/api/auth/yahoo/callback`;
+
+  if (!clientId) {
+    throw new Error('Yahoo OAuth not configured');
+  }
+
+  const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid email profile`;
+
+  return c.redirect(authUrl);
+});
+
+// GET /auth/yahoo/callback - Yahoo OAuth callback
+auth.get('/yahoo/callback', async (c) => {
+  try {
+    const code = c.req.query('code');
+
+    if (!code) {
+      throw new ValidationError('Missing authorization code');
+    }
+
+    const { token } = await authService.yahooOAuthCallback(code);
+
+    const frontendUrl = getFrontendUrl();
+    return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=yahoo`);
+  } catch (error) {
+    const frontendUrl = getFrontendUrl();
+    const errorMessage = encodeURIComponent(
+      error instanceof Error ? error.message : 'OAuth authentication failed'
+    );
+    return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
+  }
+});
+
+// GET /auth/microsoft - Microsoft OAuth initiation
+auth.get('/microsoft', async (c) => {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const redirectUri = `${getServerUrl()}/api/auth/microsoft/callback`;
+
+  if (!clientId) {
+    throw new Error('Microsoft OAuth not configured');
+  }
+
+  const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=user.read mail.read`;
+
+  return c.redirect(authUrl);
+});
+
+// GET /auth/microsoft/callback - Microsoft OAuth callback
+auth.get('/microsoft/callback', async (c) => {
+  try {
+    const code = c.req.query('code');
+
+    if (!code) {
+      throw new ValidationError('Missing authorization code');
+    }
+
+    const { token } = await authService.microsoftOAuthCallback(code);
+
+    const frontendUrl = getFrontendUrl();
+    return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=microsoft`);
+  } catch (error) {
+    const frontendUrl = getFrontendUrl();
+    const errorMessage = encodeURIComponent(
+      error instanceof Error ? error.message : 'OAuth authentication failed'
+    );
+    return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
   }
 });
 
@@ -267,10 +341,10 @@ function parseExpiresIn(expiresIn: string): number {
   if (!match) {
     return 7 * 24 * 60 * 60; // Default 7 days
   }
-  
+
   const value = parseInt(match[1], 10);
   const unit = match[2];
-  
+
   switch (unit) {
     case 's': return value;
     case 'm': return value * 60;
@@ -291,7 +365,7 @@ function parseExpiresIn(expiresIn: string): number {
  */
 auth.post('/refresh', async (c) => {
   const requestId = c.get('requestId');
-  
+
   // Get token from Authorization header
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -300,9 +374,9 @@ auth.post('/refresh', async (c) => {
       message: 'No token provided',
     }, requestId), 401);
   }
-  
+
   const token = authHeader.substring(7);
-  
+
   // Ensure JWT_SECRET is configured
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
@@ -312,36 +386,36 @@ auth.post('/refresh', async (c) => {
       message: 'Token refresh failed',
     }, requestId), 500);
   }
-  
+
   try {
     // Verify the existing token (this will fail if completely expired)
     const payload = await verify(token, jwtSecret);
-    
+
     if (!payload || !payload.userId) {
       return c.json(formatResponse(false, null, {
         code: 'UNAUTHORIZED',
         message: 'Invalid token',
       }, requestId), 401);
     }
-    
+
     // Check if user still exists
     const user = await db
       .select()
       .from(users)
       .where(eq(users.id, payload.userId as string))
       .limit(1);
-    
+
     if (user.length === 0) {
       return c.json(formatResponse(false, null, {
         code: 'UNAUTHORIZED',
         message: 'User not found',
       }, requestId), 401);
     }
-    
+
     // Generate new token with extended expiration
     const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     const expiresInSeconds = parseExpiresIn(expiresIn);
-    
+
     const newToken = await sign(
       {
         userId: payload.userId,
@@ -351,9 +425,9 @@ auth.post('/refresh', async (c) => {
       },
       jwtSecret
     );
-    
+
     logger.info({ userId: payload.userId }, 'Token refreshed');
-    
+
     return c.json(formatResponse(true, { token: newToken }, null, requestId));
   } catch (error) {
     logger.error({ error }, 'Token refresh failed');
@@ -362,6 +436,31 @@ auth.post('/refresh', async (c) => {
       message: 'Token refresh failed',
     }, requestId), 401);
   }
+});
+
+// POST /auth/exchange - Exchange provider token for app token
+const exchangeSchema = z.object({
+  provider: z.enum(['google', 'github', 'yahoo', 'microsoft']),
+  token: z.string(),
+});
+
+auth.post('/exchange', async (c) => {
+  const requestId = c.get('requestId');
+  const body = await c.req.json();
+  const validated = exchangeSchema.safeParse(body);
+
+  if (!validated.success) {
+    throw new ValidationError('Invalid request body', validated.error.errors);
+  }
+
+  const { user, token } = await authService.exchangeOAuthToken(
+    validated.data.provider,
+    validated.data.token
+  );
+
+  return c.json(
+    formatResponse(true, { user, token }, null, requestId)
+  );
 });
 
 export default auth;
