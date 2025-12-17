@@ -529,26 +529,30 @@ export const applicationService = {
    */
   async exportApplicationsToCSV(applications: any[]): Promise<string> {
     const headers = ['Company', 'Position', 'Location', 'Salary', 'Stage', 'Applied At', 'Notes'];
+    
+    const escapeCSVCell = (cell: any): string => {
+      let value = String(cell ?? '');
+      // Escape double quotes
+      value = value.replace(/"/g, '""');
+      // Replace newlines with spaces
+      value = value.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\r/g, ' ');
+      return `"${value}"`;
+    };
+    
     const rows = applications.map((app) => [
-      app.job.company,
-      app.job.position,
-      app.job.location || '',
-      app.job.salary || '',
-      app.stage,
+      // Support both nested (app.job.company) and flat (app.company) structures
+      app.job?.company ?? app.company ?? '',
+      app.job?.position ?? app.position ?? '',
+      app.job?.location ?? app.location ?? '',
+      app.job?.salary ?? app.salary ?? '',
+      app.stage ?? '',
       app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '',
-      app.notes || '',
+      app.notes ?? '',
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((cell) => {
-        let escaped = String(cell)
-          .replace(/"/g, '""')           // Escape double quotes
-          .replace(/\r\n/g, ' ')         // Replace Windows newlines with space
-          .replace(/\n/g, ' ')           // Replace Unix newlines with space
-          .replace(/\r/g, ' ');          // Replace old Mac newlines with space
-        return `"${escaped}"`;
-      }).join(',')),
+      ...rows.map((row) => row.map(escapeCSVCell).join(',')),
     ].join('\n');
 
     return csvContent;

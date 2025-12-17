@@ -834,26 +834,29 @@ export const jobService = {
    */
   async exportSavedJobsToCSV(savedJobs: any[]): Promise<string> {
     const headers = ['Company', 'Position', 'Location', 'Salary', 'Skills', 'Job Type', 'Status'];
+    
+    const escapeCSVCell = (cell: any): string => {
+      let value = String(cell ?? '');
+      // Escape double quotes
+      value = value.replace(/"/g, '""');
+      // Replace newlines with spaces
+      value = value.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\r/g, ' ');
+      return `"${value}"`;
+    };
+    
     const rows = savedJobs.map((job) => [
-      job.company || '',
-      job.position || '',
-      job.location || '',
-      job.salary || '',
-      job.skills || '',
-      job.jobType || '',
-      job.status || '',
+      job.company ?? '',
+      job.position ?? '',
+      job.location ?? '',
+      job.salary ?? '',
+      Array.isArray(job.skills) ? job.skills.join(', ') : (job.skills ?? ''),
+      job.jobType ?? '',
+      job.status ?? '',
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((cell) => {
-        let escaped = String(cell)
-          .replace(/"/g, '""')           // Escape double quotes
-          .replace(/\r\n/g, ' ')         // Replace Windows newlines with space
-          .replace(/\n/g, ' ')           // Replace Unix newlines with space
-          .replace(/\r/g, ' ');          // Replace old Mac newlines with space
-        return `"${escaped}"`;
-      }).join(',')),
+      ...rows.map((row) => row.map(escapeCSVCell).join(',')),
     ].join('\n');
 
     return csvContent;
