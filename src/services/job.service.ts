@@ -578,7 +578,7 @@ export const jobService = {
   /**
    * Block a company
    */
-  async blockCompany(userId: string, companyName: string, reason?: string, tx?: any) {
+  async blockCompany(userId: string, companyName: string, reason?: string, tx?: any) { // Transaction context when called within a transaction
     const dbContext = tx || db;
     const [blocked] = await dbContext
       .insert(blockedCompanies)
