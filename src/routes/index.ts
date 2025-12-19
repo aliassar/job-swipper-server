@@ -158,6 +158,62 @@ api.route('/auth', auth);
 // Webhook endpoints (no auth required - use custom auth middleware)
 api.route('/webhooks', webhooks);
 
+// SSE stream endpoint (custom auth via query param since EventSource doesn't support headers)
+// Must be mounted BEFORE auth middleware is applied to /notifications/*
+api.get('/notifications/stream', async (c) => {
+  const { stream } = await import('hono/streaming');
+  const { notificationService } = await import('../services/notification.service');
+  const { authService } = await import('../services/auth.service');
+
+  // Get token from query param (EventSource can't send Authorization header)
+  const token = c.req.query('token');
+  if (!token) {
+    return c.json({ error: 'Token required' }, 401);
+  }
+
+  let userId: string;
+  try {
+    const user = authService.verifyToken(token);
+    userId = user.id;
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401);
+  }
+
+  // Set SSE headers
+  c.header('Content-Type', 'text/event-stream');
+  c.header('Cache-Control', 'no-cache');
+  c.header('Connection', 'keep-alive');
+  c.header('X-Accel-Buffering', 'no');
+
+  return stream(c, async (stream) => {
+    // Send initial connection with unread count
+    const unreadCount = await notificationService.getUnreadCount(userId);
+    await stream.writeln(`data: ${JSON.stringify({ type: 'connected', unreadCount })}\n`);
+
+    // Subscribe to notifications
+    const unsubscribe = notificationService.subscribeToNotifications(
+      userId,
+      async (notification) => {
+        await stream.writeln(`data: ${JSON.stringify(notification)}\n`);
+      }
+    );
+
+    // Heartbeat
+    const heartbeat = setInterval(async () => {
+      try { await stream.writeln(': heartbeat\n'); }
+      catch {
+        clearInterval(heartbeat);
+        unsubscribe();
+      }
+    }, 30000);
+
+    stream.onAbort(() => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+});
+
 // All other routes require authentication
 // Note: Apply middleware to both root routes AND wildcard patterns
 // Wildcard patterns like '/jobs/*' only match nested routes, not the root route
