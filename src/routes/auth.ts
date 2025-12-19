@@ -124,6 +124,66 @@ auth.post('/verify-email', async (c) => {
   );
 });
 
+// POST /auth/resend-verification - Resend verification email
+auth.post('/resend-verification', authMiddleware, async (c) => {
+  const authContext = c.get('auth');
+  const requestId = c.get('requestId');
+
+  try {
+    // Get user from database
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, authContext.userId))
+      .limit(1);
+
+    if (!user) {
+      return c.json(
+        formatResponse(false, null, {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        }, requestId),
+        404
+      );
+    }
+
+    if (user.emailVerified) {
+      return c.json(
+        formatResponse(false, null, {
+          code: 'ALREADY_VERIFIED',
+          message: 'Email is already verified',
+        }, requestId),
+        400
+      );
+    }
+
+    // Generate new verification token
+    const { emailVerificationTokens } = await import('../db/schema');
+    const crypto = await import('crypto');
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
+
+    await db.insert(emailVerificationTokens).values({
+      userId: user.id,
+      token: verificationToken,
+      expiresAt,
+      used: false,
+    });
+
+    // Send verification email
+    const { emailClient } = await import('../lib/email-client');
+    await emailClient.sendVerificationEmail(user.email, verificationToken);
+
+    return c.json(
+      formatResponse(true, { message: 'Verification email sent' }, null, requestId)
+    );
+  } catch (error) {
+    logger.error({ error, requestId }, 'Failed to resend verification email');
+    throw error;
+  }
+});
+
 // POST /auth/forgot-password - Request password reset
 auth.post('/forgot-password', async (c) => {
   const requestId = c.get('requestId');
@@ -174,7 +234,15 @@ auth.get('/google', async (c) => {
     throw new Error('Google OAuth not configured');
   }
 
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=email profile`;
+  // Generate state parameter for CSRF protection
+  const crypto = await import('crypto');
+  const state = crypto.randomBytes(32).toString('base64url');
+
+  // Store state in cookie for validation on callback (httpOnly for security)
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=email profile&state=${state}`;
+
+  // Set state cookie (expires in 10 minutes)
+  c.header('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
 
   return c.redirect(authUrl);
 });
@@ -183,20 +251,31 @@ auth.get('/google', async (c) => {
 auth.get('/google/callback', async (c) => {
   try {
     const code = c.req.query('code');
+    const state = c.req.query('state');
+    const cookieHeader = c.req.header('Cookie') || '';
+    const storedState = cookieHeader.match(/oauth_state=([^;]+)/)?.[1];
 
     if (!code) {
       throw new ValidationError('Missing authorization code');
     }
 
+    // Validate state parameter to prevent CSRF
+    if (!state || !storedState || state !== storedState) {
+      throw new ValidationError('Invalid OAuth state - possible CSRF attack');
+    }
+
     const { token } = await authService.googleOAuthCallback(code);
 
     const frontendUrl = getFrontendUrl();
+    // Clear the state cookie
+    c.header('Set-Cookie', `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=google`);
   } catch (error) {
     const frontendUrl = getFrontendUrl();
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
+    c.header('Set-Cookie', `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
   }
 });
@@ -210,7 +289,14 @@ auth.get('/github', async (c) => {
     throw new Error('GitHub OAuth not configured');
   }
 
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email`;
+  // Generate state parameter for CSRF protection
+  const crypto = await import('crypto');
+  const state = crypto.randomBytes(32).toString('base64url');
+
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email&state=${state}`;
+
+  // Set state cookie (expires in 10 minutes)
+  c.header('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
 
   return c.redirect(authUrl);
 });
@@ -219,20 +305,31 @@ auth.get('/github', async (c) => {
 auth.get('/github/callback', async (c) => {
   try {
     const code = c.req.query('code');
+    const state = c.req.query('state');
+    const cookieHeader = c.req.header('Cookie') || '';
+    const storedState = cookieHeader.match(/oauth_state=([^;]+)/)?.[1];
 
     if (!code) {
       throw new ValidationError('Missing authorization code');
     }
 
+    // Validate state parameter to prevent CSRF
+    if (!state || !storedState || state !== storedState) {
+      throw new ValidationError('Invalid OAuth state - possible CSRF attack');
+    }
+
     const { token } = await authService.githubOAuthCallback(code);
 
     const frontendUrl = getFrontendUrl();
+    // Clear the state cookie
+    c.header('Set-Cookie', `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     return c.redirect(`${frontendUrl}/auth/callback?token=${token}&provider=github`);
   } catch (error) {
     const frontendUrl = getFrontendUrl();
     const errorMessage = encodeURIComponent(
       error instanceof Error ? error.message : 'OAuth authentication failed'
     );
+    c.header('Set-Cookie', `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     return c.redirect(`${frontendUrl}/auth/callback?error=${errorMessage}`);
   }
 });
@@ -328,16 +425,50 @@ auth.get('/me', authMiddleware, async (c) => {
   const authContext = c.get('auth');
   const requestId = c.get('requestId');
 
-  return c.json(
-    formatResponse(
-      true,
-      {
-        userId: authContext.userId,
-      },
-      null,
-      requestId
-    )
-  );
+  try {
+    // Fetch full user data from database
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        oauthProvider: users.oauthProvider,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, authContext.userId))
+      .limit(1);
+
+    if (!user) {
+      return c.json(
+        formatResponse(false, null, {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        }, requestId),
+        404
+      );
+    }
+
+    return c.json(
+      formatResponse(
+        true,
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            oauthProvider: user.oauthProvider,
+            createdAt: user.createdAt,
+          },
+        },
+        null,
+        requestId
+      )
+    );
+  } catch (error) {
+    logger.error({ error, requestId }, 'Failed to get user info');
+    throw error;
+  }
 });
 
 /**
