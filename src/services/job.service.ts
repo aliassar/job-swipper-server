@@ -1,7 +1,7 @@
 import { db } from '../lib/db';
 import { jobs, userJobStatus, actionHistory, userSettings, applications, blockedCompanies, reportedJobs, workflowRuns } from '../db/schema';
 import { eq, and, desc, sql, like, or, SQL, not, inArray } from 'drizzle-orm';
-import { NotFoundError } from '../lib/errors';
+import { NotFoundError, ValidationError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
 import { jobFilterClient } from '../lib/microservice-client';
@@ -20,20 +20,22 @@ export const jobService = {
    * Get pending jobs for a user with optional filters
    * @param userId - The user's UUID
    * @param search - Optional search term for company/position
-   * @param limit - Maximum number of jobs to return (default: 10)
+   * @param limit - Maximum number of jobs to return (default: 20)
    * @param location - Optional location filter
    * @param salaryMin - Optional minimum salary filter
    * @param salaryMax - Optional maximum salary filter
+   * @param offset - Number of jobs to skip (default: 0)
    * @returns Promise containing jobs array and total count
    * @throws {ValidationError} If salary range is invalid
    */
   async getPendingJobs(
     userId: string,
     search?: string,
-    limit: number = 10,
+    limit: number = 20,
     location?: string,
     salaryMin?: number,
-    salaryMax?: number
+    salaryMax?: number,
+    offset: number = 0
   ): Promise<{ jobs: JobWithStatus[]; total: number }> {
     // Get blocked companies
     const blocked = await db
@@ -109,7 +111,7 @@ export const jobService = {
     // Apply all conditions at once
     const query = baseQuery.where(and(...conditions));
 
-    const results = await query.orderBy(desc(jobs.createdAt)).limit(limit);
+    const results = await query.orderBy(desc(jobs.createdAt)).limit(limit).offset(offset);
 
     // Get total count of remaining jobs with the same filters
     // Build count conditions (same as the main query)
@@ -152,7 +154,9 @@ export const jobService = {
     const total = Number(totalResult[0]?.count || 0);
 
     return {
-      jobs: results,
+      // Type assertion needed: Drizzle returns skills as `unknown` for jsonb columns
+      // but we know it's always string[] based on our data model
+      jobs: results as unknown as JobWithStatus[],
       total,
     };
   },
@@ -198,13 +202,35 @@ export const jobService = {
     const dbContext = tx || db;
     const job = await this.getJobWithStatus(userId, jobId);
 
-    // Update or insert user job status
+    // Issue #9 fix: Validate state transitions
+    // Define valid state transitions based on state machine
+    const validTransitions: Record<string, string[]> = {
+      'pending': ['accepted', 'rejected', 'skipped', 'pending'], // pending can go to any action state
+      'null': ['accepted', 'rejected', 'skipped', 'pending'], // new jobs (null status) can go to any state
+      'undefined': ['accepted', 'rejected', 'skipped', 'pending'], // handle undefined as well
+      'accepted': ['pending'], // only rollback (back to pending)
+      'rejected': ['pending'], // only rollback
+      'skipped': ['pending'], // only rollback
+    };
+
+    const currentStatus = job.status ?? 'pending';
+    const allowedTransitions = validTransitions[currentStatus] || [];
+
+    if (!allowedTransitions.includes(status)) {
+      logger.warn({
+        userId,
+        jobId,
+        currentStatus,
+        attemptedStatus: status
+      }, 'Invalid state transition attempted');
+      throw new ValidationError(`Cannot transition job from '${currentStatus}' to '${status}'`);
+    }
     const existing = await dbContext.select().from(userJobStatus).where(
       and(eq(userJobStatus.userId, userId), eq(userJobStatus.jobId, jobId))
     ).limit(1);
 
     const now = new Date();
-    
+
     if (existing.length > 0) {
       await dbContext
         .update(userJobStatus)
@@ -310,7 +336,7 @@ export const jobService = {
     const offset = (page - 1) * limit;
 
     let whereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.saved, true));
-    
+
     if (search) {
       const escapedSearch = escapeLikePattern(search);
       whereConditions = and(
@@ -342,7 +368,7 @@ export const jobService = {
       .offset(offset);
 
     let countWhereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.saved, true));
-    
+
     if (search) {
       const escapedSearch = escapeLikePattern(search);
       countWhereConditions = and(
@@ -377,7 +403,7 @@ export const jobService = {
     const offset = (page - 1) * limit;
 
     let whereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.status, 'skipped'));
-    
+
     if (search) {
       const escapedSearch = escapeLikePattern(search);
       whereConditions = and(
@@ -405,7 +431,7 @@ export const jobService = {
       .offset(offset);
 
     let countWhereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.status, 'skipped'));
-    
+
     if (search) {
       const escapedSearch = escapeLikePattern(search);
       countWhereConditions = and(
@@ -448,8 +474,8 @@ export const jobService = {
   async acceptJob(userId: string, jobId: string, _requestId?: string, metadata?: { automaticApply?: boolean }) {
     // Use a transaction for atomicity
     return await db.transaction(async (tx) => {
-      // Update job status to accepted
-      const job = await this.updateJobStatus(userId, jobId, 'accepted', 'accepted');
+      // Update job status to accepted - pass tx for transaction atomicity
+      const job = await this.updateJobStatus(userId, jobId, 'accepted', 'accepted', tx);
 
       // Get user settings to check auto-generation preferences
       const settings = await tx
@@ -466,14 +492,14 @@ export const jobService = {
 
       // Create application record or get existing one
       let application;
-      
+
       // Check if application already exists
       const existingApplications = await tx
         .select()
         .from(applications)
         .where(and(eq(applications.userId, userId), eq(applications.jobId, jobId)))
         .limit(1);
-      
+
       if (existingApplications.length > 0) {
         application = existingApplications[0];
       } else {
@@ -513,52 +539,67 @@ export const jobService = {
         ? metadata.automaticApply
         : userPrefs.autoApplyEnabled;
 
-      // Create workflow run with idempotency key
+      // Create workflow run with deterministic idempotency key
       let workflowRun = null;
       if (shouldAutoApply) {
-        const idempotencyKey = `workflow-${userId}-${application.id}-${Date.now()}`;
-        
-        const [workflow] = await tx
-          .insert(workflowRuns)
-          .values({
-            userId,
-            applicationId: application.id,
-            idempotencyKey,
-            status: 'pending',
-            currentStep: 'initialized',
-            metadata: { jobId },
-          })
-          .returning();
-        
-        workflowRun = workflow;
+        // Use deterministic key - same application always gets same workflow key
+        const idempotencyKey = `workflow-${userId}-${application.id}`;
 
-        // Schedule 1-minute delay timer with validation
-        const failureTimestamp = new Date();
-        try {
-          const timerId = await timerService.scheduleAutoApplyDelay(userId, application.id);
-          if (!timerId || timerId === '') {
-            logger.error({ userId, applicationId: application.id }, 'Failed to create auto-apply delay timer');
-            // Update workflow status to indicate scheduling failure
-            await tx
-              .update(workflowRuns)
-              .set({
-                status: 'failed',
-                currentStep: 'timer_scheduling_failed',
-                updatedAt: failureTimestamp,
-              })
-              .where(eq(workflowRuns.id, workflowRun.id));
-          } else {
-            logger.info({ 
-              userId, 
-              jobId, 
-              applicationId: application.id, 
-              workflowRunId: workflow.id,
-              timerId 
-            }, 'Auto-apply workflow scheduled with 1-minute delay');
+        // Check if workflow already exists (handles retries)
+        const existingWorkflow = await tx
+          .select()
+          .from(workflowRuns)
+          .where(eq(workflowRuns.idempotencyKey, idempotencyKey))
+          .limit(1);
+
+        if (existingWorkflow.length > 0) {
+          // Workflow already exists from a previous retry - use it
+          workflowRun = existingWorkflow[0];
+          logger.info({ userId, applicationId: application.id, workflowId: workflowRun.id },
+            'Workflow already exists for application (retry detected)');
+        } else {
+          const [workflow] = await tx
+            .insert(workflowRuns)
+            .values({
+              userId,
+              applicationId: application.id,
+              idempotencyKey,
+              status: 'pending',
+              currentStep: 'initialized',
+              metadata: { jobId },
+            })
+            .returning();
+
+          workflowRun = workflow;
+
+          // Schedule 1-minute delay timer with validation
+          const failureTimestamp = new Date();
+          try {
+            const timerId = await timerService.scheduleAutoApplyDelay(userId, application.id);
+            if (!timerId || timerId === '') {
+              logger.error({ userId, applicationId: application.id }, 'Failed to create auto-apply delay timer');
+              // Update workflow status to indicate scheduling failure
+              await tx
+                .update(workflowRuns)
+                .set({
+                  status: 'failed',
+                  currentStep: 'timer_scheduling_failed',
+                  updatedAt: failureTimestamp,
+                })
+                .where(eq(workflowRuns.id, workflowRun.id));
+            } else {
+              logger.info({
+                userId,
+                jobId,
+                applicationId: application.id,
+                workflowRunId: workflow.id,
+                timerId
+              }, 'Auto-apply workflow scheduled with 1-minute delay');
+            }
+          } catch (timerError) {
+            logger.error({ error: timerError, userId, applicationId: application.id }, 'Exception while scheduling auto-apply timer');
+            // Don't fail the job acceptance, but log the issue
           }
-        } catch (timerError) {
-          logger.error({ error: timerError, userId, applicationId: application.id }, 'Exception while scheduling auto-apply timer');
-          // Don't fail the job acceptance, but log the issue
         }
       }
 
@@ -710,10 +751,10 @@ export const jobService = {
 
       // Notify filtering microservice based on reason
       try {
-        const filterType: FilterType = 
-          reason === 'fake' ? 'fake' : 
-          reason === 'dont_recommend_company' ? 'company_block' : 
-          'not_interested';
+        const filterType: FilterType =
+          reason === 'fake' ? 'fake' :
+            reason === 'dont_recommend_company' ? 'company_block' :
+              'not_interested';
 
         const filterRequest: JobFilterRequest = {
           jobId,
@@ -787,11 +828,11 @@ export const jobService = {
       try {
         if (process.env.JOB_FILTER_SERVICE_URL) {
           const job = await this.getJobWithStatus(userId, jobId);
-          
-          const filterType: FilterType = 
-            report.reason === 'fake' ? 'fake' : 
-            report.reason === 'dont_recommend_company' ? 'company_block' : 
-            'not_interested';
+
+          const filterType: FilterType =
+            report.reason === 'fake' ? 'fake' :
+              report.reason === 'dont_recommend_company' ? 'company_block' :
+                'not_interested';
 
           const filterRequest: JobFilterRequest = {
             jobId,
@@ -834,7 +875,7 @@ export const jobService = {
    */
   async exportSavedJobsToCSV(savedJobs: any[]): Promise<string> {
     const headers = ['Company', 'Position', 'Location', 'Salary', 'Skills', 'Job Type', 'Status'];
-    
+
     const escapeCSVCell = (cell: any): string => {
       let value = String(cell ?? '');
       // Escape double quotes
@@ -843,7 +884,7 @@ export const jobService = {
       value = value.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\r/g, ' ');
       return `"${value}"`;
     };
-    
+
     const rows = savedJobs.map((job) => [
       job.company ?? '',
       job.position ?? '',
