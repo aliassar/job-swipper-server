@@ -364,3 +364,19 @@ export const syncRuns = pgTable('sync_runs', {
   completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
+
+// Idempotency keys table for preventing duplicate requests
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  key: text('key').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  response: jsonb('response').notNull(),
+  statusCode: integer('status_code').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  // Unique constraint per user + key combination
+  uniqueUserKey: uniqueIndex('idempotency_keys_user_id_key_unique').on(table.userId, table.key),
+  // Index for cleanup job to find expired keys
+  expiresAtIdx: uniqueIndex('idempotency_keys_expires_at_idx').on(table.expiresAt),
+}));
