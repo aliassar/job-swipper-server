@@ -612,22 +612,28 @@ export const jobService = {
   },
 
   /**
-   * Rollback job acceptance
+   * Rollback job decision (accept, reject, or skip)
+   * For accepted jobs: deletes application and cancels workflows
+   * For rejected/skipped jobs: just resets status to pending
    */
   async rollbackJob(userId: string, jobId: string) {
+    // First check if there's an application (only accepted jobs create applications)
+    const existingApplication = await db
+      .select()
+      .from(applications)
+      .where(and(eq(applications.userId, userId), eq(applications.jobId, jobId)))
+      .limit(1);
+
+    // If no application exists, this was a rejected/skipped job - just reset status
+    if (existingApplication.length === 0) {
+      const job = await this.updateJobStatus(userId, jobId, 'pending', 'rollback');
+      logger.info({ userId, jobId }, 'Non-accepted job (rejected/skipped) rolled back to pending');
+      return { job, application: null };
+    }
+
+    // For accepted jobs with applications, use transaction for atomicity
     return await db.transaction(async (tx) => {
-      // Get application for the job
-      const application = await tx
-        .select()
-        .from(applications)
-        .where(and(eq(applications.userId, userId), eq(applications.jobId, jobId)))
-        .limit(1);
-
-      if (application.length === 0) {
-        throw new NotFoundError('Application');
-      }
-
-      const app = application[0];
+      const app = existingApplication[0];
 
       // Cancel any pending workflow and timers
       const workflow = await tx
