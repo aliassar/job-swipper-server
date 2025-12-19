@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AppContext } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/admin-auth';
+import { idempotencyMiddleware } from '../middleware/idempotency';
 import auth from './auth';
 import jobs from './jobs';
 import applications from './applications';
@@ -35,7 +36,7 @@ class HealthCheckCache {
     dbStatus: string;
     dbError?: string;
   } | null = null;
-  
+
   private pendingCheck: Promise<{
     status: string;
     lastCheck: number;
@@ -60,7 +61,7 @@ class HealthCheckCache {
     }>
   ) {
     const now = Date.now();
-    
+
     // Return cached result if available and fresh
     if (this.cache && now - this.cache.lastCheck < ttl) {
       return { ...this.cache, cached: true };
@@ -98,24 +99,24 @@ const HEALTH_CHECK_CACHE_TTL = 30000; // 30 seconds
  */
 api.get('/health', async (c) => {
   const requestId = c.get('requestId');
-  
+
   const result = await healthCheckCache.getOrRefresh(
     HEALTH_CHECK_CACHE_TTL,
     async () => {
       // Perform actual database check
       const { db } = await import('../lib/db');
       const { sql } = await import('drizzle-orm');
-      
+
       let dbStatus = 'healthy';
       let dbError = undefined;
-      
+
       try {
         await db.execute(sql`SELECT 1`);
       } catch (error) {
         dbStatus = 'unhealthy';
         dbError = error instanceof Error ? error.message : 'Unknown database error';
       }
-      
+
       return {
         status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
         lastCheck: Date.now(),
@@ -124,9 +125,9 @@ api.get('/health', async (c) => {
       };
     }
   );
-  
+
   const isHealthy = result.dbStatus === 'healthy';
-  
+
   return c.json(
     {
       success: isHealthy,
@@ -162,8 +163,10 @@ api.route('/webhooks', webhooks);
 // Wildcard patterns like '/jobs/*' only match nested routes, not the root route
 api.use('/jobs', authMiddleware);
 api.use('/jobs/*', authMiddleware);
+api.use('/jobs/*', idempotencyMiddleware); // Accept, reject, skip, save, rollback actions need idempotency
 api.use('/applications', authMiddleware);
 api.use('/applications/*', authMiddleware);
+api.use('/applications/*', idempotencyMiddleware); // Stage updates need idempotency
 api.use('/application-history', authMiddleware);
 api.use('/application-history/*', authMiddleware);
 api.use('/saved', authMiddleware);
@@ -174,6 +177,7 @@ api.use('/history', authMiddleware);
 api.use('/history/*', authMiddleware);
 api.use('/settings', authMiddleware);
 api.use('/settings/*', authMiddleware);
+api.use('/settings/*', idempotencyMiddleware); // Settings updates need idempotency
 api.use('/resumes', authMiddleware);
 api.use('/resumes/*', authMiddleware);
 api.use('/cover-letters', authMiddleware);

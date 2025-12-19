@@ -24,7 +24,8 @@ const acceptJobSchema = z.object({
  * 
  * Query parameters:
  * @param search - Optional search term (job title, company, etc.)
- * @param limit - Number of results to return (default: 10)
+ * @param page - Page number for pagination (default: 1)
+ * @param limit - Number of results to return (default: 20)
  * @param location - Filter by location
  * @param salaryMin - Minimum salary filter
  * @param salaryMax - Maximum salary filter
@@ -36,7 +37,9 @@ jobs.get('/', async (c) => {
   const auth = c.get('auth');
   const requestId = c.get('requestId');
   const search = sanitizeSearchInput(c.req.query('search'));
-  const limit = parseIntSafe(c.req.query('limit'), 10);
+  const page = parseIntSafe(c.req.query('page'), 1);
+  const limit = parseIntSafe(c.req.query('limit'), 20);
+  const offset = (page - 1) * limit;
   const location = sanitizeSearchInput(c.req.query('location'));
   const salaryMin = c.req.query('salaryMin') ? parseIntSafe(c.req.query('salaryMin')!, 0) : undefined;
   const salaryMax = c.req.query('salaryMax') ? parseIntSafe(c.req.query('salaryMax')!, 0) : undefined;
@@ -47,9 +50,19 @@ jobs.get('/', async (c) => {
     throw new ValidationError(validation.error!);
   }
 
-  const result = await jobService.getPendingJobs(auth.userId, search, limit, location, salaryMin, salaryMax);
+  const result = await jobService.getPendingJobs(auth.userId, search, limit, location, salaryMin, salaryMax, offset);
 
-  return c.json(formatResponse(true, result, null, requestId));
+  // Add pagination metadata
+  const response = {
+    ...result,
+    pagination: {
+      page,
+      limit,
+      hasMore: result.jobs.length === limit,
+    }
+  };
+
+  return c.json(formatResponse(true, response, null, requestId));
 });
 
 /**
@@ -112,16 +125,16 @@ jobs.post('/:id/accept', validateUuidParam('id'), async (c) => {
   const jobId = c.req.param('id');
 
   let metadata: { automaticApply?: boolean } | undefined;
-  
+
   // Parse optional request body
   try {
     const body = await c.req.json();
     const validated = acceptJobSchema.safeParse(body);
-    
+
     if (!validated.success) {
       throw new ValidationError('Invalid request body', validated.error.errors);
     }
-    
+
     metadata = validated.data;
   } catch (error) {
     // If body is empty or invalid JSON, metadata remains undefined

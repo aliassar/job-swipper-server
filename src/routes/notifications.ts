@@ -23,7 +23,7 @@ notifications.get('/', async (c) => {
   const limit = parseIntSafe(c.req.query('limit'), 20);
 
   const result = await notificationService.getNotifications(auth.userId, page, limit);
-  
+
   // Get unread count for the response
   const unreadCount = await notificationService.getUnreadCount(auth.userId);
 
@@ -52,10 +52,32 @@ notifications.get('/', async (c) => {
 /**
  * GET /notifications/stream - SSE endpoint for real-time notifications
  * 
+ * Note: EventSource API doesn't support custom headers, so we accept token via query param
+ * @query token - Auth JWT token
  * @returns Server-Sent Events stream with notifications
  */
 notifications.get('/stream', async (c) => {
+  // Try to get auth from middleware first, then fall back to query param
+  let userId: string;
+
   const auth = c.get('auth');
+  if (auth?.userId) {
+    userId = auth.userId;
+  } else {
+    // EventSource doesn't support Authorization header, so accept token via query param
+    const token = c.req.query('token');
+    if (!token) {
+      return c.json({ error: 'Authentication required' }, 401);
+    }
+
+    try {
+      const { authService } = await import('../services/auth.service');
+      const user = authService.verifyToken(token);
+      userId = user.id;
+    } catch (error) {
+      return c.json({ error: 'Invalid token' }, 401);
+    }
+  }
 
   // Set SSE headers BEFORE starting the stream
   c.header('Content-Type', 'text/event-stream');
@@ -64,12 +86,13 @@ notifications.get('/stream', async (c) => {
   c.header('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
   return stream(c, async (stream) => {
-    // Send initial connection message
-    await stream.writeln('data: {"type":"connected"}\n');
+    // Send initial connection message with unread count
+    const unreadCount = await notificationService.getUnreadCount(userId);
+    await stream.writeln(`data: ${JSON.stringify({ type: 'connected', unreadCount })}\n`);
 
     // Subscribe to notifications
     const unsubscribe = notificationService.subscribeToNotifications(
-      auth.userId,
+      userId,
       async (notification) => {
         await stream.writeln(`data: ${JSON.stringify(notification)}\n`);
       }
