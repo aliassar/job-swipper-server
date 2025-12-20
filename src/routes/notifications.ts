@@ -94,7 +94,11 @@ notifications.get('/stream', async (c) => {
     const unsubscribe = notificationService.subscribeToNotifications(
       userId,
       async (notification) => {
-        await stream.writeln(`data: ${JSON.stringify(notification)}\n`);
+        try {
+          await stream.writeln(`data: ${JSON.stringify(notification)}\n`);
+        } catch (error) {
+          // Stream may be closed, ignore error
+        }
       }
     );
 
@@ -108,10 +112,14 @@ notifications.get('/stream', async (c) => {
       }
     }, 30000); // Send heartbeat every 30 seconds
 
-    // Clean up on disconnect
-    stream.onAbort(() => {
-      clearInterval(heartbeatInterval);
-      unsubscribe();
+    // Create a promise that resolves when the stream is aborted
+    // This keeps the stream open until the client disconnects
+    await new Promise<void>((resolve) => {
+      stream.onAbort(() => {
+        clearInterval(heartbeatInterval);
+        unsubscribe();
+        resolve();
+      });
     });
   });
 });

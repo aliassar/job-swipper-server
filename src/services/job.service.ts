@@ -663,6 +663,19 @@ export const jobService = {
     return await db.transaction(async (tx) => {
       const app = existingApplication[0];
 
+      // Check if application has progressed to an irreversible stage
+      // Only 'Syncing' stage (initial state) can be rolled back
+      const irreversibleStages = ['Applied', 'Interview', 'Offer', 'Hired', 'Rejected'];
+      if (irreversibleStages.includes(app.stage)) {
+        logger.warn(
+          { userId, jobId, applicationId: app.id, stage: app.stage },
+          'Rollback blocked: application has progressed to irreversible stage'
+        );
+        throw new ValidationError(
+          `Cannot rollback job in '${app.stage}' stage - action is irreversible. The application has already been processed.`
+        );
+      }
+
       // Cancel any pending workflow and timers
       const workflow = await tx
         .select()
