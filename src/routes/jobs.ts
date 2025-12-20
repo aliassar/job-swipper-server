@@ -58,7 +58,7 @@ jobs.get('/', async (c) => {
     pagination: {
       page,
       limit,
-      hasMore: result.jobs.length === limit,
+      hasMore: offset + result.jobs.length < result.total,
     }
   };
 
