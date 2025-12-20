@@ -512,11 +512,8 @@ export const jobService = {
         .where(eq(userSettings.userId, userId))
         .limit(1);
 
-      if (settings.length === 0) {
-        return { job, application: null, workflow: null };
-      }
-
-      const userPrefs = settings[0];
+      // User settings are optional - only used for auto-apply preferences
+      const userPrefs = settings.length > 0 ? settings[0] : null;
 
       // Create application record or get existing one
       let application;
@@ -537,11 +534,12 @@ export const jobService = {
             .values({
               userId,
               jobId,
-              stage: 'Syncing',
+              stage: 'Being Applied', // 'Syncing' is frontend-only status while waiting for server response
               lastUpdated: new Date(),
             })
             .returning();
           application = newApp;
+
         } catch (error: unknown) {
           // Check if it's a unique constraint violation (duplicate application)
           if (isDatabaseError(error) && (error.code === '23505' || error.constraint === 'applications_user_id_job_id_unique')) {
@@ -562,10 +560,11 @@ export const jobService = {
 
       // Determine if auto-apply should be triggered
       // If metadata.automaticApply is explicitly set, use that value
-      // Otherwise, fall back to user's autoApplyEnabled setting
+      // Otherwise, fall back to user's autoApplyEnabled setting (if settings exist)
       const shouldAutoApply = metadata?.automaticApply !== undefined
         ? metadata.automaticApply
-        : userPrefs.autoApplyEnabled;
+        : (userPrefs?.autoApplyEnabled ?? false);
+
 
       // Create workflow run with deterministic idempotency key
       let workflowRun = null;

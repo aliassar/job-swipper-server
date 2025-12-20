@@ -249,7 +249,7 @@ export const applications = pgTable('applications', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
-  stage: applicationStageEnum('stage').notNull().default('Syncing'),
+  stage: applicationStageEnum('stage').notNull().default('Being Applied'),
   resumeFileId: uuid('resume_file_id').references(() => resumeFiles.id),
   generatedResumeId: uuid('generated_resume_id'),
   generatedCoverLetterId: uuid('generated_cover_letter_id'),
