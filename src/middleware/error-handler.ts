@@ -1,36 +1,44 @@
 import { Context } from 'hono';
 import { AppError } from '../lib/errors';
 import { formatResponse } from '../lib/utils';
+import { logger } from './logger';
 
 export async function errorHandler(err: Error, c: Context) {
-  console.error('Error:', err);
+  // Log full error details including stack trace
+  logger.error({
+    error: err.message,
+    stack: err.stack,
+    name: err.name,
+    path: c.req.path,
+    method: c.req.method,
+  }, `Unhandled error: ${err.message}`);
 
   const requestId = c.get('requestId') || 'unknown';
 
-    type HonoStatus = 400 | 401 | 403 | 404 | 429 | 500 | 502;
+  type HonoStatus = 400 | 401 | 403 | 404 | 429 | 500 | 502;
 
-    const isHonoStatus = (code: number): code is HonoStatus =>
-        [400, 401, 403, 404, 429, 500, 502].includes(code);
+  const isHonoStatus = (code: number): code is HonoStatus =>
+    [400, 401, 403, 404, 429, 500, 502].includes(code);
 
-    if (err instanceof AppError) {
-        const status: HonoStatus = isHonoStatus(err.statusCode)
-            ? err.statusCode
-            : 500;
+  if (err instanceof AppError) {
+    const status: HonoStatus = isHonoStatus(err.statusCode)
+      ? err.statusCode
+      : 500;
 
-        return c.json(
-            formatResponse(
-                false,
-                null,
-                {
-                    code: err.code,
-                    message: err.message,
-                    details: err.details,
-                },
-                requestId
-            ),
-            status
-        );
-    }
+    return c.json(
+      formatResponse(
+        false,
+        null,
+        {
+          code: err.code,
+          message: err.message,
+          details: err.details,
+        },
+        requestId
+      ),
+      status
+    );
+  }
 
 
   // Unknown error

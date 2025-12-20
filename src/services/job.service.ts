@@ -200,7 +200,36 @@ export const jobService = {
     tx?: any // Transaction context when called within a transaction
   ) {
     const dbContext = tx || db;
-    const job = await this.getJobWithStatus(userId, jobId);
+
+    // Query job with status using the transaction context (if provided)
+    const jobResult = await dbContext
+      .select({
+        id: jobs.id,
+        company: jobs.company,
+        position: jobs.position,
+        location: jobs.location,
+        salary: jobs.salary,
+        skills: jobs.skills,
+        description: jobs.description,
+        requirements: jobs.requirements,
+        benefits: jobs.benefits,
+        jobType: jobs.jobType,
+        experienceLevel: jobs.experienceLevel,
+        jobUrl: jobs.jobUrl,
+        postedDate: jobs.postedDate,
+        status: userJobStatus.status,
+        saved: userJobStatus.saved,
+      })
+      .from(jobs)
+      .leftJoin(userJobStatus, and(eq(userJobStatus.jobId, jobs.id), eq(userJobStatus.userId, userId)))
+      .where(eq(jobs.id, jobId))
+      .limit(1);
+
+    if (jobResult.length === 0) {
+      throw new NotFoundError('Job');
+    }
+
+    const job = jobResult[0];
 
     // Issue #9 fix: Validate state transitions
     // Define valid state transitions based on state machine
@@ -461,7 +490,6 @@ export const jobService = {
       },
     };
   },
-
   /**
    * Accept a job and create an application
    * @param userId - The user's UUID
