@@ -1,26 +1,26 @@
 import { db } from '../lib/db';
 import { applications, jobs, actionHistory, generatedResumes, generatedCoverLetters, resumeFiles, workflowRuns } from '../db/schema';
-import { eq, and, desc, sql, or, like, SQL, gte, lte, between } from 'drizzle-orm';
+import { eq, and, desc, sql, or, SQL, gte, lte, between } from 'drizzle-orm';
 import { NotFoundError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { storage } from '../lib/storage';
 import { timerService } from './timer.service';
 import PDFDocument from 'pdfkit';
-import { escapeLikePattern } from '../lib/utils';
+import { prepareCaseInsensitiveSearch } from '../lib/utils';
 
 export const applicationService = {
   async getApplications(userId: string, page: number = 1, limit: number = 20, search?: string) {
     const offset = (page - 1) * limit;
 
     let whereConditions: SQL<unknown> | undefined = eq(applications.userId, userId);
-    
+
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${escapedSearch}%`),
-          like(jobs.position, `%${escapedSearch}%`)
+          sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+          sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
         )
       );
     }
@@ -45,15 +45,15 @@ export const applicationService = {
       .offset(offset);
 
     let countWhereConditions: SQL<unknown> | undefined = eq(applications.userId, userId);
-    
+
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       countWhereConditions = and(
         countWhereConditions,
         sql`EXISTS (
           SELECT 1 FROM ${jobs} 
           WHERE ${jobs.id} = ${applications.jobId} 
-          AND (${like(jobs.company, `%${escapedSearch}%`)} OR ${like(jobs.position, `%${escapedSearch}%`)})
+          AND (LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`} OR LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`})
         )`
       );
     }
@@ -457,14 +457,14 @@ export const applicationService = {
       whereConditions = and(whereConditions, eq(applications.stage, options.stage as any));
     }
 
-    // Add search filter
+    // Add search filter (case-insensitive)
     if (options.search) {
-      const escapedSearch = escapeLikePattern(options.search);
+      const lowerSearch = prepareCaseInsensitiveSearch(options.search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${escapedSearch}%`),
-          like(jobs.position, `%${escapedSearch}%`)
+          sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+          sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
         )
       );
     }
@@ -529,7 +529,7 @@ export const applicationService = {
    */
   async exportApplicationsToCSV(applications: any[]): Promise<string> {
     const headers = ['Company', 'Position', 'Location', 'Salary', 'Stage', 'Applied At', 'Notes'];
-    
+
     const escapeCSVCell = (cell: any): string => {
       let value = String(cell ?? '');
       // Escape double quotes
@@ -538,7 +538,7 @@ export const applicationService = {
       value = value.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\r/g, ' ');
       return `"${value}"`;
     };
-    
+
     const rows = applications.map((app) => [
       // Support both nested (app.job.company) and flat (app.company) structures
       app.job?.company ?? app.company ?? '',
