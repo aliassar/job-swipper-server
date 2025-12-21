@@ -49,6 +49,22 @@ export function escapeLikePattern(pattern: string): string {
 }
 
 /**
+ * Prepare a search term for case-insensitive LIKE matching.
+ * Escapes special characters and converts to lowercase.
+ * Use with LOWER() SQL function on the column for case-insensitive search.
+ * 
+ * @param pattern - The search pattern
+ * @returns Lowercase escaped pattern for use with LOWER(column) LIKE pattern
+ * 
+ * @example
+ * const search = prepareCaseInsensitiveSearch('Test');
+ * // Use: sql`LOWER(${column}) LIKE ${`%${search}%`}`
+ */
+export function prepareCaseInsensitiveSearch(pattern: string): string {
+  return escapeLikePattern(pattern).toLowerCase();
+}
+
+/**
  * Extract S3 key from file URL
  * Handles various URL formats safely
  */
@@ -91,9 +107,9 @@ export function escapeHtml(text: string): string {
  * This function should be used when inserting jobs into the database
  * to populate the salaryMin and salaryMax fields for efficient querying.
  */
-export function parseSalaryRange(salaryString: string | null | undefined): { 
-  min: number | null; 
-  max: number | null 
+export function parseSalaryRange(salaryString: string | null | undefined): {
+  min: number | null;
+  max: number | null
 } {
   if (!salaryString) {
     return { min: null, max: null };
@@ -108,22 +124,22 @@ export function parseSalaryRange(salaryString: string | null | undefined): {
 
   // Try to find numbers in the string
   const numbers: number[] = [];
-  
+
   // Match patterns like "50k", "50000", "50.5k" with explicit 'k' capture
   const numberPattern = /(\d+(?:\.\d+)?)\s*(k)?/gi;
   let match;
-  
+
   while ((match = numberPattern.exec(cleaned)) !== null) {
     // Skip if this is an empty match
     if (!match[1]) continue;
-    
+
     let value = parseFloat(match[1]);
-    
+
     // If group 2 captured 'k', multiply by 1000
     if (match[2]) {
       value *= 1000;
     }
-    
+
     numbers.push(Math.round(value));
   }
 
@@ -138,7 +154,7 @@ export function parseSalaryRange(salaryString: string | null | undefined): {
   // If multiple numbers found, use min and max
   const min = Math.min(...numbers);
   const max = Math.max(...numbers);
-  
+
   return { min, max };
 }
 
