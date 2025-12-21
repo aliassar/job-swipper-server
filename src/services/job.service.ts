@@ -1,6 +1,6 @@
 import { db } from '../lib/db';
 import { jobs, userJobStatus, actionHistory, userSettings, applications, blockedCompanies, reportedJobs, workflowRuns } from '../db/schema';
-import { eq, and, desc, sql, like, or, SQL, not, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, or, SQL, not, inArray } from 'drizzle-orm';
 import { NotFoundError, ValidationError } from '../lib/errors';
 import { logger } from '../middleware/logger';
 import { timerService } from './timer.service';
@@ -8,7 +8,7 @@ import { jobFilterClient } from '../lib/microservice-client';
 import type { JobFilterRequest, JobFilterResponse, FilterType } from '../lib/microservices';
 import type { JobWithStatus } from '../types';
 import PDFDocument from 'pdfkit';
-import { escapeLikePattern } from '../lib/utils';
+import { prepareCaseInsensitiveSearch } from '../lib/utils';
 
 // Type guard for database errors
 function isDatabaseError(error: unknown): error is { code?: string; constraint?: string } {
@@ -79,22 +79,22 @@ export const jobService = {
       conditions.push(not(inArray(jobs.company, blockedCompanyNames)));
     }
 
-    // Add search if provided
+    // Add search if provided (case-insensitive)
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       const searchCondition = or(
-        like(jobs.company, `%${escapedSearch}%`),
-        like(jobs.position, `%${escapedSearch}%`)
+        sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+        sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
       );
       if (searchCondition) {
         conditions.push(searchCondition);
       }
     }
 
-    // Add location filter
+    // Add location filter (case-insensitive)
     if (location) {
-      const escapedLocation = escapeLikePattern(location);
-      conditions.push(like(jobs.location, `%${escapedLocation}%`));
+      const lowerLocation = prepareCaseInsensitiveSearch(location);
+      conditions.push(sql`LOWER(${jobs.location}) LIKE ${`%${lowerLocation}%`}`);
     }
 
     // Add salary filter using numeric fields for better performance
@@ -124,10 +124,10 @@ export const jobService = {
     }
 
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       const searchCondition = or(
-        like(jobs.company, `%${escapedSearch}%`),
-        like(jobs.position, `%${escapedSearch}%`)
+        sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+        sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
       );
       if (searchCondition) {
         countConditions.push(searchCondition);
@@ -135,8 +135,8 @@ export const jobService = {
     }
 
     if (location) {
-      const escapedLocation = escapeLikePattern(location);
-      countConditions.push(like(jobs.location, `%${escapedLocation}%`));
+      const lowerLocation = prepareCaseInsensitiveSearch(location);
+      countConditions.push(sql`LOWER(${jobs.location}) LIKE ${`%${lowerLocation}%`}`);
     }
 
     if (salaryMin !== undefined) {
@@ -367,12 +367,12 @@ export const jobService = {
     let whereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.saved, true));
 
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${escapedSearch}%`),
-          like(jobs.position, `%${escapedSearch}%`)
+          sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+          sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
         )
       );
     }
@@ -399,13 +399,13 @@ export const jobService = {
     let countWhereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.saved, true));
 
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       countWhereConditions = and(
         countWhereConditions,
         sql`EXISTS (
           SELECT 1 FROM ${jobs} 
           WHERE ${jobs.id} = ${userJobStatus.jobId} 
-          AND (${like(jobs.company, `%${escapedSearch}%`)} OR ${like(jobs.position, `%${escapedSearch}%`)})
+          AND (LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`} OR LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`})
         )`
       );
     }
@@ -434,12 +434,12 @@ export const jobService = {
     let whereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.status, 'skipped'));
 
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       whereConditions = and(
         whereConditions,
         or(
-          like(jobs.company, `%${escapedSearch}%`),
-          like(jobs.position, `%${escapedSearch}%`)
+          sql`LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`}`,
+          sql`LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`}`
         )
       );
     }
@@ -462,13 +462,13 @@ export const jobService = {
     let countWhereConditions: SQL<unknown> | undefined = and(eq(userJobStatus.userId, userId), eq(userJobStatus.status, 'skipped'));
 
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
+      const lowerSearch = prepareCaseInsensitiveSearch(search);
       countWhereConditions = and(
         countWhereConditions,
         sql`EXISTS (
           SELECT 1 FROM ${jobs} 
           WHERE ${jobs.id} = ${userJobStatus.jobId} 
-          AND (${like(jobs.company, `%${escapedSearch}%`)} OR ${like(jobs.position, `%${escapedSearch}%`)})
+          AND (LOWER(${jobs.company}) LIKE ${`%${lowerSearch}%`} OR LOWER(${jobs.position}) LIKE ${`%${lowerSearch}%`})
         )`
       );
     }
