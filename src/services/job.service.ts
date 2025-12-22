@@ -239,7 +239,7 @@ export const jobService = {
       'undefined': ['accepted', 'rejected', 'skipped', 'pending'], // handle undefined as well
       'accepted': ['pending'], // only rollback (back to pending)
       'rejected': ['pending'], // only rollback
-      'skipped': ['pending'], // only rollback
+      'skipped': ['accepted', 'rejected', 'pending'], // can be accepted/rejected directly, or rolled back to pending
     };
 
     const currentStatus = job.status ?? 'pending';
